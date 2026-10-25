@@ -218,10 +218,11 @@ function playerName() {
   try { return (localStorage.getItem("clash_name") || "").trim().slice(0, 12) || "匿名玩家"; }
   catch (e) { return "匿名玩家"; }
 }
-function cloudSubmitScore(rec) {                       // GET→追加→PUT（读改写，怕并发但够朋友局用）
+function cloudSubmitScore(rec) {                       // GET→追加→PUT，回读校验防并发覆盖
   return cloudLoadList(CLOUD_LB).then(list => {
     if (!list) return null;
-    const entry = { code: rec.code, name: cloudStr(rec.name, 12) || "匿名玩家",
+    const entry = { code: rec.code || Math.random().toString(16).slice(2, 10),
+      name: cloudStr(rec.name, 12) || "匿名玩家",
       peak: cloudNum(rec.peak, 1e9), wave: cloudNum(rec.wave, 9999), kills: cloudNum(rec.kills, 1e6),
       time: cloudNum(rec.time, 86400), level: cloudNum(rec.level, 9999), grazes: cloudNum(rec.grazes, 1e6),
       ver: cloudStr(rec.ver, 12), ts: cloudStr(rec.ts, 24) };
@@ -229,8 +230,14 @@ function cloudSubmitScore(rec) {                       // GET→追加→PUT（�
     list.push(entry);
     list.sort((a, b) => (b.peak || 0) - (a.peak || 0));
     const cap = list.slice(0, 100);
-    return cloudFetch(CLOUD_LB, JSON.stringify(cap)).then(() => ({
-      entry, rank: cap.findIndex(r => r.code === entry.code) + 1, total: cap.length, list: cap }));
+    const pack = l2 => { l2.push(entry); l2.sort((a, b) => (b.peak || 0) - (a.peak || 0)); return l2.slice(0, 100); };
+    return cloudFetch(CLOUD_LB, JSON.stringify(cap)).then(() => cloudFetch(CLOUD_LB)).then(s2 => {
+      const back = JSON.parse(s2);
+      if (Array.isArray(back) && back.some(r => r.code === entry.code))
+        return { entry, rank: back.findIndex(r => r.code === entry.code) + 1, total: back.length, list: back };
+      return cloudFetch(CLOUD_LB, JSON.stringify(pack(back))).then(() => ({    // 并发覆盖了：补投一次
+        entry, rank: back.findIndex(r => r.code === entry.code) + 1, total: back.length + 1, list: pack(back) }));
+    });
   }).catch(() => null);
 }
 function cloudSendMessage(rec) {
@@ -252,6 +259,7 @@ function cloudRename(code, name) {                     // 直接改本条云端�
   }).catch(() => null);
 }
 function kickCloud() {                                 // 败北后一次性触发：上传成绩 + 拉留言
+  if (!ST.myCode) ST.myCode = Math.random().toString(16).slice(2, 10);
   ST.cloudState = "loading";
   cloudSubmitScore({ code: ST.myCode, name: playerName(),
     peak: Math.round(ST.peak), wave: ST.wave, kills: ST.kills,
