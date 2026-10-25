@@ -14,7 +14,7 @@
   #ui { position:absolute; inset:0; pointer-events:none; }
   #ui input, #ui button { pointer-events:auto; box-sizing:border-box;
     background:rgba(20,16,48,0.92); color:#7dffcf; border:1px solid #2a2450; border-radius:4px;
-    padding:4px 10px; font:14px "Microsoft YaHei","PingFang SC",sans-serif; outline:none; }
+    padding:4px 10px; font:16px "Microsoft YaHei","PingFang SC",sans-serif; outline:none; }
   #ui input:focus { border-color:#7dffcf; }
   #nameIn { position:absolute; left:50%; top:38.5%; transform:translateX(-50%); width:210px; display:none; text-align:center; }
   #msgRow { position:absolute; left:50%; top:85%; transform:translateX(-50%); display:none; white-space:nowrap; }
@@ -267,14 +267,18 @@ cv.addEventListener("pointerdown", e => {
   TOUCH.on = true;
   const p = toGame(e);
   const inB = (b, pad = 10) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + pad;
+  // 菜单场景（升级/暂停/结算）：整屏点选，绝不抓摇杆——否则左边选项点不到
+  if (ST.scene === "levelup" || ST.scene === "pause" || ST.scene === "over") {
+    clickAt = p; return;
+  }
+  if (ST.scene === "intro") { hit.ok = true; return; }       // 点任意处开始
   if (inB(BTN.dash)) { hit.ok = true; return; }              // 冲刺按钮 = 空格
   if (inB(BTN.pause)) { hit.cancel = true; return; }         // 暂停按钮 = Esc
-  if (p.x < W * 0.5) {                                       // 左半屏 = 虚拟摇杆
+  if (p.x < W * 0.5) {                                       // 左半屏 = 虚拟摇杆（仅游戏进行中）
     TOUCH.joyId = e.pointerId; TOUCH.joyBX = p.x; TOUCH.joyBY = p.y;
     TOUCH.dx = 0; TOUCH.dy = 0; return;
   }
-  if (ST.scene === "intro" || ST.scene === "over") { hit.ok = true; return; }  // 点按确认
-  clickAt = p;                                               // 升级卡/暂停选项点选
+  clickAt = p;                                               // 右侧空白点选（预留）
 });
 cv.addEventListener("pointermove", e => {
   if (e.pointerId !== TOUCH.joyId) return;
@@ -660,14 +664,19 @@ function updateClash(dt) {
     if (ST.overT > 0.9) {
       if (!ST.cloudKicked) { ST.cloudKicked = true; kickCloud(); }
       if (isTriggered("left") || isTriggered("right")) { ST.overView = 1 - ST.overView; beep(700, 0.05, 0.06); }
-      if (clickAt) {                                    // 页签点按（触屏）
+      if (clickAt) {                                    // 页签 / 再来一局 点按（触屏）
         for (let i = 0; i < 2; i++) {
           const dx = i === 0 ? -100 : 100;
           if (Math.abs(clickAt.x - (W / 2 + dx)) < 75 && Math.abs(clickAt.y - 292) < 17) {
             ST.overView = i; beep(700, 0.05, 0.06);
           }
         }
+        const wantRestart = Math.abs(clickAt.x - W / 2) < 140 && Math.abs(clickAt.y - 500) < 18;
         clickAt = null;
+        if (wantRestart) {                              // 点按是明确意图，不吃 uiLock
+          if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+          startGame(); return;
+        }
       }
       if (isTriggered("ok") && ST.uiLock <= 0) {
         if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
@@ -1260,6 +1269,7 @@ function drawIntro() {
     txt(f[2], ix + 160, y + 1, 14, "#8fa3c8", "left");
   });
   line(424, "每波 30 秒（Boss 波 45 秒）· 清得越快，下一波绿球越多 · 每局从头开始", "#cfe3ff", 15);
+  if (TOUCH.on && innerHeight > innerWidth) txt("↻ 建议横屏游玩", W / 2, 455, 15, "#ffd24d");
   txt("按 空格 开始", ix + iw / 2, iy + 499, 20, "#7dffcf");
   txt("当前版本 " + VERSION + "（网页版 · 机制移植自 MZ v0.81）", ix + iw / 2, iy + 530, 12, "#5a5a8a");
 }
@@ -1352,8 +1362,13 @@ function drawOver() {
       });
     }
   }
-  txt(ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "留言已发送!" : "← → 切换 · 空格 再来一局",
-    cx, 500, 18, ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "#52ff9a" : "#7dffcf");
+  const hint = ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "留言已发送!" : "← → 切换 · 空格 再来一局";
+  ctx.fillStyle = "rgba(16,12,36,0.88)";
+  ctx.fillRect(cx - 145, 482, 290, 36);
+  ctx.fillStyle = ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "#52ff9a" : "#7dffcf";
+  ctx.fillRect(cx - 145, 482, 290, 2); ctx.fillRect(cx - 145, 516, 290, 2);
+  txt(hint, cx, 500, 17, ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "#52ff9a" : "#7dffcf");
+  if (TOUCH.on) txt("（点此再来一局）", cx, 545, 12, "#5a5a8a");
 }
 
 /* ============ 主渲染 ============ */
