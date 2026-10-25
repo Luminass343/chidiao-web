@@ -10,10 +10,23 @@
   #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
   canvas { box-shadow:0 0 80px rgba(70,50,150,.4); border-radius:4px;
     touch-action:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+  #stage { position:relative; }
+  #ui { position:absolute; inset:0; pointer-events:none; }
+  #ui input, #ui button { pointer-events:auto; box-sizing:border-box;
+    background:rgba(20,16,48,0.92); color:#7dffcf; border:1px solid #2a2450; border-radius:4px;
+    padding:4px 10px; font:14px "Microsoft YaHei","PingFang SC",sans-serif; outline:none; }
+  #ui input:focus { border-color:#7dffcf; }
+  #nameIn { position:absolute; left:50%; top:38.5%; transform:translateX(-50%); width:210px; display:none; text-align:center; }
+  #msgRow { position:absolute; left:50%; top:85%; transform:translateX(-50%); display:none; white-space:nowrap; }
+  #msgIn { width:230px; }
+  #msgBtn { color:#05040f; background:#7dffcf; border-color:#7dffcf; cursor:pointer; font-weight:700; }
 </style>
 </head>
 <body>
-<div id="wrap"><canvas id="cv" width="816" height="624"></canvas></div>
+<div id="wrap"><div id="stage"><canvas id="cv" width="816" height="624"></canvas><div id="ui">
+  <input id="nameIn" maxlength="12" placeholder="你的 ID（匿名玩家）" autocomplete="off">
+  <div id="msgRow"><input id="msgIn" maxlength="60" placeholder="留句话…（60字内）" autocomplete="off"><button id="msgBtn">发送</button></div>
+</div></div></div>
 <script>
 "use strict";
 /* ==========================================================================
@@ -53,6 +66,8 @@ const ST = {
   upgrades: { spd: 0, heal: 0 },
   pv: 10, dir: 2, animT: 0, moving: false, dispCd: 0,
   overT: 0, lbRank: 0, lbTotal: 0, bgmMuted: false,
+  overView: 0, cloudState: "idle", cloudRank: 0, cloudTotal: 0, cloudList: null,
+  cloudKicked: false, myCode: "", msgList: null, msgSentT: -99,
 };
 const LU = { open: false, sel: 0, list: [] };          // 升级选择
 const PU = { open: false, sel: 0 };                    // 暂停菜单
@@ -153,6 +168,65 @@ function lbSubmit(rec) {
   return { rank: kept.indexOf(rec) + 1, total: kept.length };
 }
 
+/* ============ 全服共享排行榜 + 留言板（textdb.dev 免后端键值存储） ============ */
+const CLOUD_LB = "https://textdb.dev/api/data/chidiao-lb-efrm0x06";
+const CLOUD_MSG = "https://textdb.dev/api/data/chidiao-msg-efrm0x06";
+function cloudFetch(url, body) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 4500);
+  const opt = { signal: ctl.signal, headers: {} };
+  if (body) { opt.method = "POST"; opt.body = body; opt.headers["Content-Type"] = "text/plain"; }
+  return fetch(url, opt).then(r => { if (!r.ok) throw new Error("http " + r.status); return r.text(); })
+    .finally(() => clearTimeout(t));
+}
+function cloudLoadList(key) {                          // 失败返回 null（区分"空表"）
+  return cloudFetch(key).then(s => {
+    const a = JSON.parse(s);
+    return Array.isArray(a) ? a : [];
+  }).catch(() => null);
+}
+const cloudNum = (v, m) => { const n = Math.round(Number(v) || 0); return isFinite(n) ? Math.max(0, Math.min(m, n)) : 0; };
+const cloudStr = (s, m) => String(s || "").replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, m);
+function playerName() {
+  try { return (localStorage.getItem("clash_name") || "").trim().slice(0, 12) || "匿名玩家"; }
+  catch (e) { return "匿名玩家"; }
+}
+function cloudSubmitScore(rec) {                       // GET→追加→PUT（读改写，怕并发但够朋友局用）
+  return cloudLoadList(CLOUD_LB).then(list => {
+    if (!list) return null;
+    const entry = { code: rec.code, name: cloudStr(rec.name, 12) || "匿名玩家",
+      peak: cloudNum(rec.peak, 1e9), wave: cloudNum(rec.wave, 9999), kills: cloudNum(rec.kills, 1e6),
+      time: cloudNum(rec.time, 86400), level: cloudNum(rec.level, 9999), grazes: cloudNum(rec.grazes, 1e6),
+      ver: cloudStr(rec.ver, 12), ts: cloudStr(rec.ts, 24) };
+    if (!entry.peak) return null;
+    list.push(entry);
+    list.sort((a, b) => (b.peak || 0) - (a.peak || 0));
+    const cap = list.slice(0, 100);
+    return cloudFetch(CLOUD_LB, JSON.stringify(cap)).then(() => ({
+      entry, rank: cap.findIndex(r => r.code === entry.code) + 1, total: cap.length, list: cap }));
+  }).catch(() => null);
+}
+function cloudSendMessage(rec) {
+  return cloudLoadList(CLOUD_MSG).then(list => {
+    if (!list) return null;
+    const text = cloudStr(rec.text, 60);
+    if (!text) return null;
+    const cap = [{ name: cloudStr(rec.name, 12) || "匿名玩家", text, ts: cloudStr(rec.ts, 24) }, ...list].slice(0, 50);
+    return cloudFetch(CLOUD_MSG, JSON.stringify(cap)).then(() => cap);
+  }).catch(() => null);
+}
+function kickCloud() {                                 // 败北后一次性触发：上传成绩 + 拉留言
+  ST.cloudState = "loading";
+  cloudSubmitScore({ code: ST.myCode, name: playerName(),
+    peak: Math.round(ST.peak), wave: ST.wave, kills: ST.kills,
+    time: Math.round(ST.t), level: ST.level, grazes: ST.grazeN,
+    ver: VERSION, ts: nowStr() }).then(r => {
+    if (r) { ST.cloudState = "ok"; ST.cloudRank = r.rank; ST.cloudTotal = r.total; ST.cloudList = r.list; }
+    else ST.cloudState = "fail";
+  });
+  cloudLoadList(CLOUD_MSG).then(l => { if (l) ST.msgList = l; });
+}
+
 /* ============ 输入 ============ */
 const KEYMAP = {
   ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
@@ -163,6 +237,8 @@ const KEYMAP = {
 };
 const held = {}, hit = {};
 addEventListener("keydown", e => {
+  const tg = e.target && e.target.tagName;
+  if (tg === "INPUT" || tg === "TEXTAREA") return;   // 输入框里打字不触发游戏键
   const k = KEYMAP[e.code];
   if (e.code === "KeyM" && !e.repeat) { ST.bgmMuted = !ST.bgmMuted; return; }
   if (!k) return;
@@ -231,6 +307,8 @@ function startGame() {
     upgrades: { spd: 0, heal: 0 },
     chain: { t: 0, n: 0 }, regen: { ramp: 0, pause: 0, accum: 0, resets: 0, fullT: 0, redKept: 0 }, grazeN: 0,
     overT: 0, pv: 10, dir: 2, animT: 0, dispCd: 0, lbRank: 0, lbTotal: 0,
+    overView: 0, cloudState: "idle", cloudRank: 0, cloudTotal: 0, cloudList: null,
+    cloudKicked: false, msgSentT: -99,
   });
   ST.pvAvg = 10;
   buildWaveSchedule();
@@ -580,8 +658,25 @@ function updateClash(dt) {
   if (ST.scene === "over") {
     ST.overT += dt;
     if (ST.overT > 0.9) {
-      if (isTriggered("ok") && ST.uiLock <= 0) { startGame(); return; }
-      if (isTriggered("cancel")) { startGame(); return; }
+      if (!ST.cloudKicked) { ST.cloudKicked = true; kickCloud(); }
+      if (isTriggered("left") || isTriggered("right")) { ST.overView = 1 - ST.overView; beep(700, 0.05, 0.06); }
+      if (clickAt) {                                    // 页签点按（触屏）
+        for (let i = 0; i < 2; i++) {
+          const dx = i === 0 ? -100 : 100;
+          if (Math.abs(clickAt.x - (W / 2 + dx)) < 75 && Math.abs(clickAt.y - 292) < 17) {
+            ST.overView = i; beep(700, 0.05, 0.06);
+          }
+        }
+        clickAt = null;
+      }
+      if (isTriggered("ok") && ST.uiLock <= 0) {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        startGame(); return;
+      }
+      if (isTriggered("cancel")) {
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        startGame(); return;
+      }
     }
     decayFx(dt);
     return;
@@ -959,9 +1054,11 @@ function updateClash(dt) {
     if (pvF > ST.peak) ST.peak = pvF;
     pushText(W / 2, H / 2, "数值归零 · 败北", "#ff6b6b", 32);
     seq([330, 247, 165], 140);
-    const rec = { peak: Math.round(ST.peak), wave: ST.wave, kills: ST.kills,
+    const rec = { code: Math.random().toString(16).slice(2, 10),
+      peak: Math.round(ST.peak), wave: ST.wave, kills: ST.kills,
       time: Math.round(ST.t), level: ST.level, grazes: ST.grazeN,
       ts: nowStr(), ver: VERSION };
+    ST.myCode = rec.code;
     const r = lbSubmit(rec);
     ST.lbRank = r.rank; ST.lbTotal = r.total;
   }
@@ -1209,7 +1306,7 @@ function drawPause() {
 function fmtTime(t) { return Math.floor(t / 60) + "分" + Math.round(t % 60) + "秒"; }
 function drawOver() {
   if (ST.overT <= 0.9) return;
-  ctx.fillStyle = "rgba(6,4,16,0.78)"; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(6,4,16,0.85)"; ctx.fillRect(0, 0, W, H);
   const cx = W / 2;
   txt("数值归零 · 败北", cx, 120, 40, "#ff6b6b");
   txt("峰值 " + Math.round(ST.peak) + " · 第 " + ST.wave + " 波 · 击杀 " + ST.kills +
@@ -1217,18 +1314,46 @@ function drawOver() {
   txt("Lv " + ST.level + " · 黑球消除 " + ST.grazeN + " 次 · 死因：" +
     ({ big: "红球", bounce: "蓝球", chase: "橙球", bossBar: "BOSS·横扫",
        bossCross: "BOSS·十字", round: "BOSS·巨岩" }[ST.lastHit] || ST.lastHit || "?"), cx, 212, 16, "#8fa3c8");
-  if (ST.lbRank > 0)
-    txt("本地排行榜：第 " + ST.lbRank + " 名 / 共 " + ST.lbTotal + " 条", cx, 254, 20, "#ffd24d");
-  const list = lbLoad().slice(0, 5);
-  if (list.length) {
-    txt("—— 峰值排行 ——", cx, 292, 14, "#5a5a8a");
-    list.forEach((r, i) => {
-      txt((i + 1) + ". " + r.peak + "  ·  第" + r.wave + "波  ·  击杀" + r.kills + "  ·  " +
-        fmtTime(r.time), cx, 322 + i * 28, 16, i === 0 ? "#ffd24d" : "#8fa3c8");
-    });
+  // ID 输入框（HTML 覆盖层，位置对应游戏坐标 y≈253）
+  txt("ID", cx - 120, 253, 15, "#8fa3c8", "right");
+  txt("改名后下次上传生效", cx + 118, 253, 12, "#5a5a8a", "left");
+  // 页签
+  [["全服榜", -100], ["留言板", 100]].forEach(([s, dx], i) => {
+    const sel = ST.overView === i;
+    ctx.fillStyle = sel ? "rgba(20,60,60,0.9)" : "rgba(16,12,36,0.88)";
+    ctx.fillRect(cx + dx - 75, 275, 150, 34);
+    ctx.fillStyle = sel ? "#7dffcf" : "#5a5a8a";
+    ctx.fillRect(cx + dx - 75, 275, 150, 2); ctx.fillRect(cx + dx - 75, 307, 150, 2);
+    txt(s, cx + dx, 292, 17, sel ? "#7dffcf" : "#8fa3c8");
+  });
+  if (ST.overView === 0) {                              // 全服榜
+    if (ST.cloudState === "loading" || ST.cloudState === "idle") {
+      txt("云端同步中…", cx, 330, 16, "#8fa3c8");
+    } else if (ST.cloudState === "fail") {
+      txt("云端不可达 · 成绩已存本地", cx, 330, 16, "#ff8fa3");
+    } else {
+      txt("全服排行榜：第 " + ST.cloudRank + " 名 / 共 " + ST.cloudTotal + " 条", cx, 322, 18, "#ffd24d");
+      (ST.cloudList || []).slice(0, 8).forEach((r, i) => {
+        const mine = r.code === ST.myCode;
+        txt((i + 1) + ". " + r.name + "  " + r.peak + "  第" + r.wave + "波 · 击杀" + r.kills + " · " + fmtTime(r.time),
+          cx, 354 + i * 26, 15, mine ? "#7dffcf" : (i === 0 ? "#ffd24d" : "#8fa3c8"));
+      });
+      if (ST.cloudRank > 8) txt("…  你的成绩：第 " + ST.cloudRank + " 名", cx, 354 + 8 * 26, 14, "#7dffcf");
+    }
+  } else {                                              // 留言板
+    if (ST.msgList == null) {
+      txt("云端同步中…", cx, 330, 16, "#8fa3c8");
+    } else if (!ST.msgList.length) {
+      txt("还没有留言 —— 抢个沙发！", cx, 330, 16, "#8fa3c8");
+    } else {
+      ST.msgList.slice(0, 7).forEach((m, i) => {
+        const body = m.text.length > 26 ? m.text.slice(0, 26) + "…" : m.text;
+        txt(m.name + "：" + body, cx, 326 + i * 27, 15, i === 0 ? "#7dffcf" : "#8fa3c8");
+      });
+    }
   }
-  txt("按 空格 再来一局", cx, 500, 22, "#7dffcf");
-  txt("成绩已自动存入本地排行榜", cx, 540, 13, "#5a5a8a");
+  txt(ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "留言已发送!" : "← → 切换 · 空格 再来一局",
+    cx, 500, 18, ST.overView === 1 && ST.t - ST.msgSentT < 2 ? "#52ff9a" : "#7dffcf");
 }
 
 /* ============ 主渲染 ============ */
@@ -1278,6 +1403,7 @@ function render() {
   else if (ST.scene === "levelup") drawLevelup();
   else if (ST.scene === "pause") drawPause();
   else if (ST.scene === "over") drawOver();
+  syncOverlays();
 }
 
 /* ============ 暂停菜单输入 ============ */
@@ -1317,6 +1443,31 @@ function frame(now) {
   render();
   requestAnimationFrame(frame);
 }
+/* ============ 覆盖输入框（ID / 留言） ============ */
+const nameIn = document.getElementById("nameIn");
+const msgIn = document.getElementById("msgIn");
+const msgBtn = document.getElementById("msgBtn");
+const msgRow = document.getElementById("msgRow");
+try { nameIn.value = (localStorage.getItem("clash_name") || "").trim().slice(0, 12); } catch (e) {}
+nameIn.addEventListener("change", () => {
+  try { localStorage.setItem("clash_name", nameIn.value.trim().slice(0, 12)); } catch (e) {}
+});
+async function sendMsg() {
+  const text = msgIn.value;
+  if (!text.trim()) return;
+  msgBtn.disabled = true;
+  const list = await cloudSendMessage({ name: playerName(), text, ts: nowStr() });
+  msgBtn.disabled = false;
+  if (list) { ST.msgList = list; ST.msgSentT = ST.t; msgIn.value = ""; }
+}
+msgBtn.addEventListener("click", sendMsg);
+msgIn.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); sendMsg(); } });
+function syncOverlays() {
+  const over = ST.scene === "over" && ST.overT > 0.9;
+  nameIn.style.display = over ? "block" : "none";
+  msgRow.style.display = over && ST.overView === 1 ? "block" : "none";
+}
+
 startGame();                            // 首屏：startGame → 规则页（按空格开局）
 requestAnimationFrame(frame);
 </script>
