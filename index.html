@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>不管了，统统吃掉！ · 网页版 v0.81-web</title>
+<style>
+  html, body { margin:0; height:100%; background:#05040f; overflow:hidden;
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif; }
+  #wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; }
+  canvas { box-shadow:0 0 80px rgba(70,50,150,.4); border-radius:4px;
+    touch-action:none; -webkit-user-select:none; user-select:none; -webkit-tap-highlight-color:transparent; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="cv" width="816" height="624"></canvas></div>
+<script>
+"use strict";
+/* ==========================================================================
+   《不管了，统统吃掉！》网页版 v0.81-web
+   移植自 RPG Maker MZ 插件 js/plugins/CollisionClash.js v0.81（ZCode 制作）
+   机制 1:1：碰撞等价交换 / 橙红蓝黑四球 / 三形态两段 Boss / 冲刺无敌帧 /
+   蓝球红字吞噬 / 黑球擦弹连消 / 再生 / 四选一升级 / 每波限时二选一挑战
+   ========================================================================== */
+
+const W = 816, H = 624, VERSION = "v0.81-web";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+function fit() { const s = Math.max(0.2, Math.min(innerWidth / W, innerHeight / H));
+  cv.style.width = Math.round(W * s) + "px"; cv.style.height = Math.round(H * s) + "px"; }
+addEventListener("resize", fit); fit();
+
+/* ============ 内嵌素材 ============ */
+const HINA = new Image(); HINA.src = "data:image/png;base64,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";   // 主角日奈 64px 格
+const GRASS = new Image(); GRASS.src = "data:image/png;base64,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"; // 草地图块 48px
+
+/* ============ 常量 ============ */
+const WAVE_TIME = 30, BOSS_BONUS = 15;
+const SPD = { chase: 82.5, big: 33, bounce: 160, boss: 55 };
+
+/* ============ 全局状态（每局 startGame 重置） ============ */
+const ST = {
+  active: false, wave: 1, waveT: 30, waveElapsed: 0, budget: 70, breather: 0,
+  enemies: [], texts: [], parts: [], orbs: [], bossWarn: null,
+  psizeMul: 1, shrink: null, shrinkAt: 0, shrinkSpawned: false,
+  magStacks: 0, xpMul: 1, lowWarned: false, blacks: [], blackT: 0, orbMul: 1, orbLayers: 0, dashT: 0,
+  sampleT: 5, tlPicks: {}, lastHit: "", lastHitV: 0, lastBoss: null, bossEarly: false, forceQ: [],
+  pvAvg: 10, bossPreset: 350, bossFloor: 0, curRound: 1, bossDeployed: false,
+  popT: 0, mx: 0, my: 0, magnetMul: 1,
+  scene: "intro", iframes: 0, dodgeCd: 0, spawnT: 0, orbT: 1.2, orbRate: 1,
+  bossSpawned: false, kills: 0, peak: 10, t: 0,
+  chain: { t: 0, n: 0 }, regen: { ramp: 0, pause: 0, accum: 0, resets: 0, fullT: 0 }, grazeN: 0,
+  xp: 0, level: 1, pending: 0, uiLock: 0,
+  upgrades: { spd: 0, heal: 0 },
+  pv: 10, dir: 2, animT: 0, moving: false, dispCd: 0,
+  overT: 0, lbRank: 0, lbTotal: 0, bgmMuted: false,
+};
+const LU = { open: false, sel: 0, list: [] };          // 升级选择
+const PU = { open: false, sel: 0 };                    // 暂停菜单
+
+/* ============ 工具 ============ */
+const rnd = (a, b) => a + Math.random() * (b - a);
+const clampN = (v, a, b) => Math.max(a, Math.min(b, v));
+const playerValue = () => ST.pv;
+const xpNeed = () => Math.round(15 * Math.pow(ST.level, 1.4));
+const baseSpeed = () => 4 + Math.log2(1 + Math.min(0.4, 0.05 * ST.upgrades.spd));
+
+/* v0.67：体型温和化——v>1000 后增长系数减半 */
+const radiusOf = v => {
+  const s = Math.sqrt(Math.max(0, v));
+  return 12 + 1.6 * Math.min(s, 31.62) + 0.8 * Math.max(0, s - 31.62);
+};
+const eRad = e => (e.radCur != null ? e.radCur : radiusOf(e.value) * (e.sizeMul || 1));
+const pHalf = () => Math.max(24, radiusOf(playerValue()) * ST.psizeMul * 0.95);
+const pHalfX = () => Math.max(16, pHalf() * 0.64);
+const OCT_K = 2 / (2 + Math.SQRT2);
+function circleOctHit(cx, cy, cr, px, py, hx, hy, slop) {  // 圆 vs 八边形（左右更窄）
+  let x = clampN(cx - px, -hx, hx), y = clampN(cy - py, -hy, hy);
+  const k = OCT_K * (hx + hy) / 2;
+  const d = hx + hy - k;
+  const sx = x >= 0 ? 1 : -1, sy = y >= 0 ? 1 : -1;
+  const u = sx * x + sy * y;
+  if (u > d) { const t = (u - d) / 2; x -= sx * t; y -= sy * t; }
+  x = clampN(x, -hx, hx); y = clampN(y, -hy, hy);
+  return Math.hypot(cx - px - x, cy - py - y) < cr + (slop || 0);
+}
+function segClosest(px, py, ax, ay, bx2, by2) {
+  const abx = bx2 - ax, aby = by2 - ay;
+  const t = clampN(((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby || 1), 0, 1);
+  return [ax + abx * t, ay + aby * t];
+}
+const nowStr = () => {
+  const d = new Date(), z = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate()) + " " +
+    z(d.getHours()) + ":" + z(d.getMinutes()) + ":" + z(d.getSeconds());
+};
+
+/* ============ 极简合成音效 ============ */
+let AC = null;
+function initAudio() {
+  try { AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === "suspended") AC.resume(); } catch (e) {}
+}
+function beep(freq, dur = 0.1, vol = 0.1, type = "sine") {
+  try {
+    initAudio(); if (!AC) return;
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + dur);
+  } catch (e) {}
+}
+const seq = (arr, step = 80, vol = 0.1) =>
+  arr.forEach((f, i) => setTimeout(() => beep(f, 0.12, vol), i * step));
+
+/* ============ 合成 BGM（低音量琶音循环，M 键开关） ============ */
+const BGM = {
+  next: 0, step: 0,
+  NOTES: [220, 0, 261.6, 329.6, 0, 329.6, 440, 0,   196, 0, 246.9, 293.7, 0, 293.7, 392, 0,
+          174.6, 0, 220, 261.6, 0, 261.6, 349.2, 0, 196, 0, 246.9, 293.7, 0, 392, 0, 293.7],
+  update() {
+    try {
+      if (!AC || ST.bgmMuted) return;
+      const playing = ST.active && (ST.scene === "play" || ST.scene === "levelup" || ST.scene === "pause");
+      if (!playing) { this.next = Math.max(this.next, AC.currentTime + 0.1); return; }
+      while (this.next < AC.currentTime + 0.35) {
+        const f = this.NOTES[this.step % this.NOTES.length];
+        const when = Math.max(this.next, AC.currentTime);
+        if (f > 0) {
+          const o = AC.createOscillator(), g = AC.createGain();
+          o.type = "triangle"; o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, when);
+          g.gain.linearRampToValueAtTime(0.026, when + 0.03);
+          g.gain.exponentialRampToValueAtTime(0.0001, when + 0.5);
+          o.connect(g); g.connect(AC.destination);
+          o.start(when); o.stop(when + 0.55);
+        }
+        this.step++; this.next += 0.24;
+      }
+    } catch (e) {}
+  },
+};
+
+/* ============ 本地排行榜（localStorage） ============ */
+const LB_KEY = "clash_web_lb_v1";
+function lbLoad() { try { return JSON.parse(localStorage.getItem(LB_KEY)) || []; } catch (e) { return []; } }
+function lbSubmit(rec) {
+  const l = lbLoad(); l.push(rec);
+  l.sort((a, b) => b.peak - a.peak);
+  try { localStorage.setItem(LB_KEY, JSON.stringify(l.slice(0, 50))); } catch (e) {}
+  const kept = l.slice(0, 50);
+  return { rank: kept.indexOf(rec) + 1, total: kept.length };
+}
+
+/* ============ 输入 ============ */
+const KEYMAP = {
+  ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right",
+  ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
+  Space: "ok", Enter: "ok", KeyZ: "ok",
+  ShiftLeft: "shift", ShiftRight: "shift",
+  Escape: "cancel",
+};
+const held = {}, hit = {};
+addEventListener("keydown", e => {
+  const k = KEYMAP[e.code];
+  if (e.code === "KeyM" && !e.repeat) { ST.bgmMuted = !ST.bgmMuted; return; }
+  if (!k) return;
+  e.preventDefault();
+  initAudio();
+  if (!e.repeat) { held[k] = true; hit[k] = true; }
+});
+addEventListener("keyup", e => { const k = KEYMAP[e.code]; if (k) held[k] = false; });
+addEventListener("blur", () => { for (const k in held) held[k] = false; });
+const isPressed = k => !!held[k];
+const isTriggered = k => !!hit[k];
+const clearTriggers = () => { for (const k in hit) hit[k] = false; };
+/* ============ 触控 / 指针（手机虚拟摇杆 + 冲刺/暂停按钮 + 菜单点按） ============ */
+const TOUCH = {
+  on: (typeof matchMedia === "function") && matchMedia("(pointer: coarse)").matches,
+  joyId: null, joyBX: 0, joyBY: 0, dx: 0, dy: 0, R: 48,
+};
+const BTN = { dash: { x: W - 92, y: H - 92, r: 58 }, pause: { x: W - 36, y: 36, r: 22 } };
+let clickAt = null;
+function toGame(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
+cv.addEventListener("pointerdown", e => {
+  e.preventDefault(); initAudio();
+  TOUCH.on = true;
+  const p = toGame(e);
+  const inB = (b, pad = 10) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + pad;
+  if (inB(BTN.dash)) { hit.ok = true; return; }              // 冲刺按钮 = 空格
+  if (inB(BTN.pause)) { hit.cancel = true; return; }         // 暂停按钮 = Esc
+  if (p.x < W * 0.5) {                                       // 左半屏 = 虚拟摇杆
+    TOUCH.joyId = e.pointerId; TOUCH.joyBX = p.x; TOUCH.joyBY = p.y;
+    TOUCH.dx = 0; TOUCH.dy = 0; return;
+  }
+  if (ST.scene === "intro" || ST.scene === "over") { hit.ok = true; return; }  // 点按确认
+  clickAt = p;                                               // 升级卡/暂停选项点选
+});
+cv.addEventListener("pointermove", e => {
+  if (e.pointerId !== TOUCH.joyId) return;
+  const p = toGame(e);
+  let dx = p.x - TOUCH.joyBX, dy = p.y - TOUCH.joyBY;
+  const d = Math.hypot(dx, dy);
+  if (d > TOUCH.R) { dx = dx / d * TOUCH.R; dy = dy / d * TOUCH.R; }
+  TOUCH.dx = dx; TOUCH.dy = dy;
+});
+const endTouch = e => {
+  if (e.pointerId === TOUCH.joyId) { TOUCH.joyId = null; TOUCH.dx = 0; TOUCH.dy = 0; }
+};
+cv.addEventListener("pointerup", endTouch);
+cv.addEventListener("pointercancel", endTouch);
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+/* ============ 开局 / 重置 ============ */
+function startGame() {
+  Object.assign(ST, {
+    active: true, wave: 1, waveT: 30, waveElapsed: 0, budget: 70, breather: 0,
+    enemies: [], texts: [], parts: [], orbs: [], bossWarn: null,
+    psizeMul: 1, shrink: null, shrinkAt: rnd(4, 24), shrinkSpawned: false,
+    magStacks: 0, xpMul: 1, lowWarned: false, blacks: [], blackT: rnd(9, 15), orbMul: 1, orbLayers: 0, dashT: 0,
+    sampleT: 5, tlPicks: {}, lastHit: "", lastHitV: 0, lastBoss: null, bossEarly: false, forceQ: [],
+    pvAvg: 10, bossPreset: 350, bossFloor: 0, curRound: 1, bossDeployed: false, bossQueued: false,
+    popT: 0, mx: W / 2, my: H / 2, magnetMul: 1,
+    scene: "play", iframes: 0, dodgeCd: 0, spawnT: 0.5, orbT: 1.2, orbRate: 1,
+    bossSpawned: false, kills: 0, peak: 10, t: 0,
+    xp: 0, level: 1, pending: 0, uiLock: 0,
+    upgrades: { spd: 0, heal: 0 },
+    chain: { t: 0, n: 0 }, regen: { ramp: 0, pause: 0, accum: 0, resets: 0, fullT: 0, redKept: 0 }, grazeN: 0,
+    overT: 0, pv: 10, dir: 2, animT: 0, dispCd: 0, lbRank: 0, lbTotal: 0,
+  });
+  ST.pvAvg = 10;
+  buildWaveSchedule();
+  ST.scene = "intro"; ST.uiLock = 0.3;                 // 先看规则页
+  beep(440, 0.12, 0.1);
+}
+function dismissIntro() {
+  ST.scene = "play"; ST.uiLock = 0.2;
+  pushText(W / 2, 100, "第 1 波", "#ffd24d", 26);
+  pushText(W / 2, 140, "空格 = 冲刺闪避（5秒冷却）", "#4dd8ff", 18);
+  beep(660, 0.09, 0.1);
+}
+
+/* ============ 波次与刷怪 ============ */
+function buildWaveSchedule() {                          // v0.46：保底日程
+  ST.forceQ = [
+    { kind: "bounce", at: rnd(0.5, 4) },
+    { kind: "bounce", at: rnd(4, 8) },
+  ];
+  if (ST.wave >= 2) ST.forceQ.push({ kind: "big", at: rnd(2, 15) });
+  if (ST.wave >= 4) ST.forceQ.push({ kind: "big", at: rnd(6, 18) });
+  ST.forceQ.sort((a, b) => a.at - b.at);
+}
+function pickKind() {
+  const r = Math.random();
+  if (ST.wave >= 2 && r < 0.08) return "big";
+  if (ST.waveT >= 14 && r < 0.30) return "bounce";
+  return "chase";
+}
+function placeAtEdge(e) {
+  const m = 50, side = (Math.random() * 4) | 0;
+  e.x = side === 0 ? rnd(0, W) : side === 1 ? W + m : side === 2 ? rnd(0, W) : -m;
+  e.y = side === 0 ? -m : side === 1 ? rnd(0, H) : side === 2 ? H + m : rnd(0, H);
+}
+function spawnEnemy() { spawnEnemyOfKind(pickKind(), false); }
+function spawnEnemyOfKind(kind, forced) {
+  const pv = playerValue();
+  let v, sizeMul = 1;
+  if (kind === "big") {
+    const t = rnd(0.55, 0.7);
+    v = Math.round(Math.max(pv * t, Math.min(15 + ST.wave * 5, pv * 0.55)));
+  } else if (kind === "bounce") {
+    const fx = (15 + ST.wave * 8) * rnd(0.8, 1.1);
+    v = Math.round(fx + Math.min(pv * 0.08, fx));
+  } else {
+    v = Math.round((4 + ST.wave * 4 + Math.max(0, ST.wave - 4) * 9) * rnd(0.7, 1.3));
+    sizeMul = 0.5;
+  }
+  const floorV = Math.max(3, ST.wave * 2);
+  if (!forced && ST.budget < floorV) return;
+  if (!forced) v = Math.min(v, ST.budget);
+  ST.budget = Math.max(0, ST.budget - v);
+  const color = kind === "big" ? "#ff4d6d" : kind === "bounce" ? "#4dd8ff" : "#ff7a4d";
+  const e = { value: v, cd: 0, x: 0, y: 0, boss: false, kind, sizeMul, color };
+  placeAtEdge(e);
+  if (kind === "bounce") {
+    const a = Math.atan2(H / 2 - e.y, W / 2 - e.x) + rnd(-0.7, 0.7);
+    e.bx = Math.cos(a); e.by = Math.sin(a);
+  }
+  ST.enemies.push(e);
+}
+
+/* ============ 黑球：横穿屏幕的纯危害物 ============ */
+function spawnBlackDir(x, y, dx, dy) {
+  const d = Math.hypot(dx, dy) || 1;
+  ST.blacks.push({ x, y, r: 26, bx: dx / d, by: dy / d, cd: 0, ph: rnd(0, 6.28) });
+}
+function spawnBlack() {
+  const side = (Math.random() * 4) | 0, m = 70;
+  let x, y, tx, ty;
+  if (side === 0)      { x = -m; y = rnd(70, H - 70); tx = W + m; ty = rnd(70, H - 70); }
+  else if (side === 1) { x = W + m; y = rnd(70, H - 70); tx = -m; ty = rnd(70, H - 70); }
+  else if (side === 2) { x = rnd(70, W - 70); y = -m; tx = rnd(70, W - 70); ty = H + m; }
+  else                 { x = rnd(70, W - 70); y = H + m; tx = rnd(70, W - 70); ty = -m; }
+  spawnBlackDir(x, y, tx - x, ty - y);
+  beep(140, 0.2, 0.12, "sawtooth");
+}
+function updateBlacks(dt, px, py) {
+  if (ST.wave >= 2 && ST.breather <= 0) {
+    ST.blackT -= dt;
+    if (ST.blackT <= 0) {
+      spawnBlack();
+      ST.blackT = rnd(9, 15) * Math.max(0.35, 1 - ST.wave * 0.05);
+    }
+  }
+  for (const b of ST.blacks) {
+    b.cd = Math.max(0, (b.cd || 0) - dt);
+    b.x += b.bx * 120 * dt; b.y += b.by * 120 * dt;
+    if (!b.dead && !b.grazed && ST.iframes > 0 &&
+        circleOctHit(b.x, b.y, b.r, px, py, pHalfX(), pHalf(), 2)) {
+      b.grazed = true; b.dead = true;                 // 黑球消灭
+      burst(b.x, b.y, 16, "#b44dff");
+      ST.dodgeCd = Math.max(1.5, ST.dodgeCd - 2.5);   // 冷却返还
+      ST.chain.n = ST.chain.t > 0 ? ST.chain.n + 1 : 1;
+      ST.chain.t = 8;
+      ST.grazeN++;
+      const cm = [1, 1.5, 2, 2.5][Math.min(ST.chain.n, 4) - 1];
+      const gx2 = Math.min(Math.ceil(xpNeed() * 0.25),
+        Math.ceil((6 + ST.wave * 2.5) * (1 + 0.15 * ST.upgrades.spd) * cm));
+      const gv = Math.round((2 + ST.wave) * (1 + 0.25 * ST.upgrades.spd) * cm);
+      gainXp(gx2);
+      if (gv > 0) ST.pv = playerValue() + gv;
+      pushText(b.x, b.y - 40,
+        ST.chain.n >= 2 ? "消除! x" + ST.chain.n + " · " + cm + "倍" : "消除!", "#7dffcf",
+        ST.chain.n >= 2 ? 22 : 20);
+      if (gv > 0) pushText(b.x, b.y - 64, "+" + gv, "#ffd24d", 15);
+      beep(1200, 0.07, 0.1); beep(1600, 0.08, 0.08);
+    }
+    if (!b.dead && b.cd <= 0 && ST.iframes <= 0 &&
+        circleOctHit(b.x, b.y, b.r, px, py, pHalfX(), pHalf(), 2)) {
+      b.cd = 1.5;                                      // v0.80：多段触发间隔
+      const pvB = playerValue();
+      ST.pv = Math.max(1, Math.floor(pvB * 0.5));
+      if (ST.upgrades.heal > 0) { ST.regen.ramp = 0; ST.regen.pause = 1.5; ST.regen.resets++; }
+      pushText(px, py - 60, "数值 -50%!", "#ff5c5c", 26);
+      beep(110, 0.3, 0.18, "sawtooth");
+    }
+  }
+  ST.blacks = ST.blacks.filter(b => !b.dead &&
+    !(b.x < -100 || b.x > W + 100 || b.y < -100 || b.y > H + 100));
+}
+
+/* ============ Boss 预警 / 生成 ============ */
+function startBossWarning() {
+  let x, y, tries = 0;
+  const estV = Math.min(Math.max(120, playerValue() * 1.1), playerValue() + 300);
+  const zr = Math.min(radiusOf(estV), 88);
+  const safe = zr + 280;
+  do { x = rnd(120, W - 120); y = rnd(120, H - 120); tries++; }
+  while (tries < 25 && Math.hypot(x - ST.mx, y - ST.my) < safe);
+  ST.bossWarn = { x, y, t: 5, shown: -1, zr };
+  ST.bossDeployed = true;
+  ST.waveT += BOSS_BONUS;                              // Boss 登场的那一波才加时
+  beep(180, 0.35, 0.12, "sawtooth");
+}
+function updateBossWarn(dt) {
+  const w = ST.bossWarn; if (!w) return;
+  w.t -= dt;
+  const n = Math.max(0, Math.ceil(w.t));
+  if (n !== w.shown) { w.shown = n; beep(660, 0.05, 0.07); }
+  if (w.t <= 0) {
+    const x = w.x, y = w.y;
+    ST.bossWarn = null;
+    spawnBossAt(x, y);
+    burst(x, y, 30, "#b44dff");
+  }
+}
+function spawnBossAt(x, y) {
+  const round = ST.curRound;
+  const pv = playerValue();
+  const v = Math.min(Math.max(120, pv * 1.1) * (1 + 0.15 * (round - 1)), pv + 300);
+  const sizeMul = Math.min(1, 88 / radiusOf(v));
+  const type = ["round", "bar", "cross"][(round - 1) % 3];
+  const e = { value: v, cd: 1.2, x, y, boss: true, cracked: false };
+  if (type === "bar") {
+    e.kind = "bossBar"; e.barL = 300; e.barT = 36; e.color = "#ff9dff";
+    const a = rnd(0, 6.28); e.ang = a; e.wang = 0.9;
+    e.bx = Math.cos(a + 1.57); e.by = Math.sin(a + 1.57);
+    pushText(x, y - 90, "BOSS·横扫", "#ff9dff", 26);
+  } else if (type === "cross") {
+    e.kind = "bossCross"; e.armL = 130; e.armT = 30; e.color = "#ffb84d";
+    e.orbA = rnd(0, 6.28); e.fireT = 2.0;
+    pushText(x, y - 90, "BOSS·十字", "#ffb84d", 26);
+  } else {
+    e.kind = "round"; e.sizeMul = sizeMul; e.color = "#b44dff";
+    pushText(x, y - 90, "BOSS·巨岩", "#b44dff", 30);
+  }
+  ST.enemies.push(e);
+  ST.bossSpawned = true;
+  ST.lastBoss = { kind: type, v: Math.round(v) };
+  beep(90, 0.5, 0.2, "sawtooth");
+}
+function spawnOrb(x, y, v, life, noMul) {
+  if (ST.orbs.length >= 20) return;
+  const o = { value: v, x: 0, y: 0, ph: rnd(0, 6.28), life: life != null ? life : null, noMul: !!noMul };
+  if (x === undefined) {
+    let tries = 0;
+    do { o.x = rnd(40, W - 40); o.y = rnd(60, H - 40); tries++; }
+    while (tries < 12 && Math.hypot(o.x - ST.mx, o.y - ST.my) < 130);
+  } else { o.x = x; o.y = y; }
+  ST.orbs.push(o);
+}
+
+/* ============ 特效 ============ */
+function pushText(x, y, text, color, size = 18) {
+  ST.texts.push({ x, y, text, color, size, life: 0.9 });
+}
+function burst(x, y, n, color) {
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, 6.28), sp = rnd(60, 300);
+    ST.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rnd(0.3, 0.6), color });
+  }
+}
+function decayFx(dt) {
+  for (const t of ST.texts) { t.life -= dt; t.y -= 30 * dt; }
+  ST.texts = ST.texts.filter(t => t.life > 0);
+  for (const p of ST.parts) { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+  ST.parts = ST.parts.filter(p => p.life > 0);
+}
+
+/* ============ 经验与升级 ============ */
+function gainXp(v) {
+  ST.xp += Math.round(v * ST.xpMul);
+  while (ST.xp >= xpNeed()) { ST.xp -= xpNeed(); ST.level++; ST.pending++; }
+}
+function openLevelup() {
+  ST.scene = "levelup"; ST.uiLock = 0.2;
+  LU.open = true; LU.sel = 0;
+  LU.list = activeChoices();
+  seq([523, 659, 784], 90);
+}
+const CHOICES = [
+  { key: "spd", name: "迅捷 +5%", sub: () =>
+    "移速+5% · 冲刺" + Math.max(1.5, 5 - 0.2 * (ST.upgrades.spd + 1)).toFixed(1) +
+    "s · 消球×" + (1 + 0.25 * (ST.upgrades.spd + 1)).toFixed(2) },
+  { key: "mag", name: "吸取范围", sub: () =>
+    "磁吸半径 x" + (Math.round(ST.magnetMul * (1 + (ST.magStacks < 3 ? 0.25 : 0.10)) * 10) / 10).toFixed(1) },
+  { key: "heal", name: "再生 +1档", sub: () =>
+    "每秒+" + ((ST.upgrades.heal + 1) * (0.3 + 0.12 * ST.wave)).toFixed(1) + " · 不受击蓄满" },
+  { key: "orb", name: "绿球强化", sub: () => {
+    const next = Math.min(4, Math.round((ST.orbMul + (ST.orbLayers < 5 ? 0.2 : 0.05)) * 100) / 100);
+    return ST.orbMul >= 4 ? "收益 x4.00（已满级）" : "绿球收益 x" + ST.orbMul.toFixed(2) + " → x" + next.toFixed(2);
+  } },
+];
+function activeChoices() { return CHOICES.filter(c => !(c.key === "orb" && ST.orbMul >= 4)); }
+function applyChoice(i) {
+  const c = (LU.list && LU.list[i]) || CHOICES[i];
+  ST.tlPicks[c.key] = (ST.tlPicks[c.key] || 0) + 1;
+  if (c.key === "spd") ST.upgrades.spd++;
+  else if (c.key === "mag") {
+    const step = ST.magStacks < 3 ? 0.25 : 0.10;
+    ST.magStacks++;
+    ST.magnetMul = Math.round(ST.magnetMul * (1 + step) * 10) / 10;
+  } else if (c.key === "heal") ST.upgrades.heal++;
+  else if (c.key === "orb") {
+    ST.orbLayers++;
+    const step = ST.orbLayers <= 5 ? 0.2 : 0.05;
+    ST.orbMul = Math.min(4, Math.round((ST.orbMul + step) * 100) / 100);
+  }
+  beep(784, 0.1, 0.12);
+  ST.pending--;
+  if (ST.pending > 0) { LU.list = activeChoices(); if (LU.sel >= LU.list.length) LU.sel = 0; }
+  else { LU.open = false; ST.scene = "play"; ST.uiLock = 0.2; }
+}
+
+/* ============ 蓝球吞噬（红字阶段 / 冲刺无敌帧） ============ */
+function devourBlue(e, hx, hy) {
+  const v = Math.round(e.value);
+  ST.pv = playerValue() + v;
+  ST.popT = 0.3;
+  pushText(hx, hy - 36, "吞噬! +" + v, "#ffd24d", 24);
+  burst(hx, hy, 16, "#4dd8ff");
+  seq([523, 784, 1047], 70);
+  e.dead = true;
+  ST.kills++;
+  const gx = Math.min(Math.ceil(e.value), Math.ceil(xpNeed() * 0.5));
+  gainXp(gx);
+  pushText(e.x, e.y - 54, "EXP+" + gx, "#7dffcf", 14);
+}
+
+/* ============ 击杀结算 ============ */
+function killEnemy(e) {
+  e.dead = true;
+  if (playerValue() > 0.5) {
+    ST.kills++;
+    const gx = Math.min(
+      Math.ceil(e.boss ? e.value * 2 : e.value * (e.kind === "big" ? 0.4 : 1)),
+      Math.ceil(xpNeed() * 0.5));
+    gainXp(gx);
+    pushText(e.x, e.y - 54, "EXP+" + gx, "#7dffcf", 14);
+    if (e.boss) {
+      const bv2 = Math.max(2, Math.round(e.value * 0.5 / 8));
+      for (let i = 0; i < 8; i++)
+        spawnOrb(e.x + rnd(-90, 90), e.y + rnd(-70, 90), bv2, null, true);
+      pushText(e.x, e.y - 70, "钱袋打穿 · 返还 " + bv2 * 8, "#52ff9a", 20);
+    } else if (e.kind === "big") {
+      const n = clampN(5 - Math.floor((e.age || 0) / 6), 0, 5);
+      const v = Math.max(3, Math.ceil(e.value * 0.25));
+      for (let i = 0; i < n; i++)
+        spawnOrb(rnd(60, W - 60), rnd(80, H - 80), v, null, true);
+      if (n > 0) pushText(e.x, e.y - 70, "奖励 x" + n, "#52ff9a", 16);
+    } else if (e.kind === "bounce" && e.orbs != null && e.orbs <= 0) {
+      /* 终局大奖在红字吞噬内 */
+    } else if (Math.random() < 0.3) {
+      spawnOrb(e.x, e.y, Math.max(2, Math.ceil(e.value / 2)));
+    }
+  }
+}
+
+/* ============ 核心：碰撞数值比拼 ============ */
+function clashPlayer(ev, ex, ey, kind) {
+  const pv = playerValue();
+  const px = ST.mx, py = ST.my;
+  pushText(ex, ey - 30, Math.round(pv) + " ? " + Math.round(ev), "#ffffff", 20);
+  let dmg = ev;
+  if (kind === "big" && pv - dmg <= 0.5) dmg = Math.max(0, pv - 1);   // 红球锁1血
+  ST.pv = pv - dmg;
+  ST.lastHit = kind || "?";
+  ST.lastHitV = ev;
+  if (ST.upgrades.heal > 0) {
+    if (kind === "big") {                                // 手术保险：只暂停不清档
+      ST.regen.pause = 1.5;
+      ST.regen.redKept = (ST.regen.redKept || 0) + 1;
+      pushText(px, py - 76, "手术保险 · 再生档保留", "#52ff9a", 14);
+    } else {
+      ST.regen.ramp = 0; ST.regen.pause = 1.5; ST.regen.resets++;
+    }
+  }
+  pushText(px, py - 44, "-" + Math.min(dmg, Math.max(0, Math.round(pv))), "#ff6b6b", 22);
+  beep(150, 0.15, 0.13, "square");
+}
+
+/* ============ 每帧更新（1:1 移植 updateClash） ============ */
+function updateClash(dt) {
+  ST.t += dt;
+  ST.uiLock = Math.max(0, ST.uiLock - dt);
+  ST.pvAvg = ST.pvAvg * 0.998 + playerValue() * 0.002;
+
+  /* 升级选择中：世界冻结 */
+  if (ST.scene === "levelup") {
+    const N = activeChoices().length;
+    if (isTriggered("left"))  { LU.sel = (LU.sel + N - 1) % N; beep(700, 0.05, 0.06); }
+    if (isTriggered("right")) { LU.sel = (LU.sel + 1) % N; beep(700, 0.05, 0.06); }
+    if (N === 4 && (isTriggered("up") || isTriggered("down"))) {
+      LU.sel = (LU.sel + 2) % N; beep(700, 0.05, 0.06);
+    }
+    if (isTriggered("ok")) applyChoice(LU.sel);
+    if (clickAt && N > 0) {                              // 鼠标可选
+      for (let i = 0; i < N; i++) {
+        const c = cardRect(i, N);
+        if (clickAt.x >= c.x - 110 && clickAt.x <= c.x + 110 &&
+            clickAt.y >= c.y - 46 && clickAt.y <= c.y + 46) {
+          if (clickAt.moved !== false) { LU.sel = i; applyChoice(i); }
+          break;
+        }
+      }
+      clickAt = null;
+    }
+    decayFx(dt);
+    return;
+  }
+  if (ST.scene === "intro") {
+    if (ST.uiLock <= 0 && isTriggered("ok")) dismissIntro();
+    decayFx(dt);
+    return;
+  }
+  if (ST.scene === "over") {
+    ST.overT += dt;
+    if (ST.overT > 0.9) {
+      if (isTriggered("ok") && ST.uiLock <= 0) { startGame(); return; }
+      if (isTriggered("cancel")) { startGame(); return; }
+    }
+    decayFx(dt);
+    return;
+  }
+  if (ST.scene !== "play") { decayFx(dt); return; }
+
+  /* Esc 暂停 */
+  if (isTriggered("cancel")) { ST.scene = "pause"; PU.open = true; PU.sel = 0; beep(660, 0.06, 0.07); return; }
+  /* M 音乐开关 */
+  if (isTriggered("mute")) {}
+
+  /* 触发排队中的升级 */
+  if (ST.pending > 0) { openLevelup(); return; }
+
+  ST.iframes = Math.max(0, ST.iframes - dt);
+  ST.dodgeCd = Math.max(0, ST.dodgeCd - dt);
+  ST.popT = Math.max(0, (ST.popT || 0) - dt);
+
+  /* --- 波次调度 --- */
+  if (ST.breather > 0) {
+    ST.breather -= dt;
+    if (ST.breather <= 0) {
+      ST.waveT = WAVE_TIME; ST.waveElapsed = 0;
+      if (ST.wave % 5 === 0 && !ST.bossDeployed) {
+        ST.bossEarly = false; ST.bossQueued = false;
+        startBossWarning();
+      } else if (ST.bossQueued && !ST.bossWarn) {
+        ST.bossQueued = false;
+        startBossWarning();
+      }
+    }
+  } else {
+    ST.waveT -= dt; ST.spawnT -= dt; ST.waveElapsed += dt;
+    if (ST.waveT <= 10 && !ST.lowWarned) {
+      ST.lowWarned = true; beep(880, 0.09, 0.1);
+      pushText(W / 2, 170, "最后10秒 · 蓝球可吞噬", "#4dd8ff", 20);
+    }
+    while (ST.forceQ.length && ST.waveElapsed >= ST.forceQ[0].at) {
+      spawnEnemyOfKind(ST.forceQ.shift().kind, true);
+    }
+    if (ST.budget > 0 && ST.spawnT <= 0 &&
+        ST.enemies.length < Math.min(20, 6 + ST.wave)) {
+      spawnEnemy(); ST.spawnT = rnd(0.5, 1.2);
+    }
+    const fieldCleared = ST.budget <= 0 && ST.enemies.length === 0 && !ST.bossWarn;
+    if (ST.waveT <= 0 || fieldCleared) {
+      if (fieldCleared) {
+        ST.orbRate = Math.max(0.3, ST.orbRate * 0.9);
+        pushText(W / 2, 135, "提前清场 · 绿球生成 +10%", "#52ff9a", 18);
+        seq([660, 880], 80);
+      }
+      ST.wave++;
+      const fxB = ST.wave % 5 === 0 ? 60 + ST.wave * 18 : 60 + ST.wave * 45;
+      ST.budget = Math.round(fxB + Math.min(
+        playerValue() * (ST.wave % 5 === 0 ? 0.45 : 0.8), fxB * 2));
+      ST.breather = 2.5;
+      ST.shrinkAt = rnd(4, 24); ST.shrinkSpawned = false;
+      ST.lowWarned = false;
+      buildWaveSchedule();
+      const nr = Math.ceil(ST.wave / 5);
+      if (nr !== ST.curRound) {
+        ST.curRound = nr; ST.bossDeployed = false;
+        ST.bossPreset = Math.max(350 * Math.pow(2.0, nr - 1), ST.bossFloor);
+      }
+      pushText(W / 2, 100, "第 " + ST.wave + " 波", "#ffd24d", 26);
+      beep(440, 0.12, 0.1);
+    }
+  }
+
+  updateBossWarn(dt);
+
+  /* 数值达到预警线：Boss 下一波开场来袭 */
+  if (!ST.bossDeployed && !ST.bossWarn && !ST.bossQueued &&
+      !ST.enemies.some(e => e.boss) && ST.pvAvg >= ST.bossPreset) {
+    ST.bossEarly = true; ST.bossQueued = true; ST.bossDeployed = true;
+    pushText(W / 2, 170, "数值超限 · BOSS 下一波来袭!", "#ff8fa3", 24);
+    seq([220, 165], 120);
+  }
+
+  /* 遥测采样：峰值记录 */
+  ST.sampleT -= dt;
+  if (ST.sampleT <= 0) {
+    ST.sampleT = 5;
+    const pvS = Math.round(playerValue());
+    if (pvS > ST.peak) ST.peak = pvS;
+  }
+
+  /* 连消链窗口 */
+  if (ST.chain.t > 0) ST.chain.t -= dt; else ST.chain.n = 0;
+
+  /* 再生流 */
+  if (ST.upgrades.heal > 0) {
+    const RG = ST.regen;
+    RG.pause = Math.max(0, RG.pause - dt);
+    ST.dispCd = Math.max(0, (ST.dispCd || 0) - dt);
+    if (RG.pause <= 0) {
+      RG.ramp = Math.min(1, RG.ramp + dt / 5);
+      const rate = ST.upgrades.heal * (0.3 + 0.12 * ST.wave) * RG.ramp;
+      ST.pv = playerValue() + rate * dt;
+      RG.accum += rate * dt;
+      if (RG.ramp >= 1) RG.fullT += dt;
+      RG.disp = (RG.disp || 0) + rate * dt;
+      if (RG.disp >= 1 && ST.dispCd <= 0) {
+        const n = Math.floor(RG.disp);
+        pushText(ST.mx, ST.my + pHalf() + 16, "+" + n, "#52ff9a", 13);
+        RG.disp -= n; ST.dispCd = 1.2;
+      }
+    }
+  }
+
+  /* 冲刺：空格触发 */
+  if (isTriggered("ok") && !ST.dodgeCd && ST.uiLock <= 0) {
+    ST.dashT = 0.25;
+    ST.iframes = 0.45;
+    ST.dodgeCd = Math.max(1.5, 5 - 0.2 * ST.upgrades.spd);
+    burst(ST.mx, ST.my, 12, "#4dd8ff");
+    beep(300, 0.08, 0.07, "triangle");
+  }
+
+  /* 像素级移动 */
+  if (ST.dashT > 0) ST.dashT = Math.max(0, ST.dashT - dt);
+  let mvx = (isPressed("right") ? 1 : 0) - (isPressed("left") ? 1 : 0);
+  let mvy = (isPressed("down") ? 1 : 0) - (isPressed("up") ? 1 : 0);
+  if (TOUCH.joyId !== null) {                          // 虚拟摇杆接管移动
+    const dz = TOUCH.R * 0.22;
+    mvx = TOUCH.dx > dz ? 1 : TOUCH.dx < -dz ? -1 : 0;
+    mvy = TOUCH.dy > dz ? 1 : TOUCH.dy < -dz ? -1 : 0;
+  }
+  ST.moving = !!(mvx || mvy);
+  if (ST.moving || ST.dashT > 0) {
+    let dirx = mvx, diry = mvy;
+    if (!dirx && !diry && ST.dashT > 0) {               // 冲刺中无输入：沿面向方向
+      dirx = ST.dir === 6 ? 1 : ST.dir === 4 ? -1 : 0;
+      diry = ST.dir === 2 ? 1 : ST.dir === 8 ? -1 : 0;
+    }
+    const len = Math.hypot(dirx, diry) || 1;
+    const spd = ST.dashT > 0 ? 600 :
+      Math.pow(2, baseSpeed() + (isPressed("shift") ? 1 : 0)) * 11.25;
+    ST.mx += dirx / len * spd * dt;
+    ST.my += diry / len * spd * dt;
+    if (mvx || mvy) ST.dir = mvy > 0 ? 2 : mvy < 0 ? 8 : mvx > 0 ? 6 : 4;
+    if (ST.dashT > 0) {
+      ST.parts.push({ x: ST.mx, y: ST.my, vx: 0, vy: 0, life: 0.3, color: "#4dd8ff", size: 5 });
+    }
+    ST.animT += dt;
+  }
+  ST.mx = clampN(ST.mx, 26, W - 26);
+  ST.my = clampN(ST.my, 30, H - 24);
+  const px = ST.mx, py = ST.my;
+
+  /* --- 敌人：移动 --- */
+  for (const e of ST.enemies) {
+    e.cd = Math.max(0, e.cd - dt);
+    e.age = (e.age || 0) + dt;
+    if (e.boss) {                                        // Boss=移动钱袋：每9秒渗2颗
+      e.leakT = (e.leakT == null ? 6 : e.leakT) - dt;
+      if (e.leakT <= 0) {
+        e.leakT = 9;
+        const bv = Math.max(2, Math.round(e.value * 0.05));
+        for (let i = 0; i < 2; i++)
+          spawnOrb(clampN(e.x + rnd(-70, 70), 40, W - 40),
+            clampN(e.y + rnd(-60, 70), 60, H - 60), bv, null, true);
+      }
+    }
+    if (e.kind === "bounce") {                           // 红字阶段=可吞噬态
+      const dev = ST.breather <= 0 && ST.waveT <= 10;
+      if (dev !== !!e.dev) { e.dev = dev; if (dev) beep(980, 0.06, 0.07); }
+    }
+    if (e.kind === "big") {                              // 在场每6秒奖励-1
+      const tk = Math.floor(e.age / 6);
+      if (tk > (e.tick || 0)) {
+        e.tick = tk;
+        if (tk <= 5) pushText(e.x, e.y - 70, "奖励 -1", "#ff8fa3", 14);
+      }
+    }
+    if (e.kind === "bounce" && ST.breather <= 0 && ST.waveT > 10) {  // 养球
+      e.orbs = e.orbs == null ? 6 : e.orbs;
+      e.dropT = (e.dropT == null ? 1.0 : e.dropT) - dt;
+      if (e.dropT <= 0 && e.orbs > 0) {
+        const window = ST.waveT - 10;
+        e.dropT = Math.max(0.8, window / (e.orbs + 1));
+        e.orbs--;
+        spawnOrb(clampN(e.x, 40, W - 40), clampN(e.y, 60, H - 60), Math.round(rnd(3, 4)));
+      }
+    }
+    if (e.kind === "bounce") {                           // 直线 + 四边反弹
+      e.x += e.bx * SPD.bounce * dt;
+      e.y += e.by * SPD.bounce * dt;
+      const r = eRad(e);
+      if (e.x < r)                   { e.x = r;           e.bx =  Math.abs(e.bx); }
+      if (e.x > W - r)               { e.x = W - r;       e.bx = -Math.abs(e.bx); }
+      if (e.y < r)                   { e.y = r;           e.by =  Math.abs(e.by); }
+      if (e.y > H - r)               { e.y = H - r;       e.by = -Math.abs(e.by); }
+    } else if (e.kind === "bossBar") {                   // 直线漂移+自旋
+      e.x += e.bx * SPD.boss * dt;
+      e.y += e.by * SPD.boss * dt;
+      const m = 130;
+      if (e.x < m)       { e.x = m;       e.bx =  Math.abs(e.bx); }
+      if (e.x > W - m)   { e.x = W - m;   e.bx = -Math.abs(e.bx); }
+      if (e.y < m)       { e.y = m;       e.by =  Math.abs(e.by); }
+      if (e.y > H - m)   { e.y = H - m;   e.by = -Math.abs(e.by); }
+      e.ang += e.wang * dt;
+    } else if (e.kind === "bossCross") {                 // 八字轨道+四方齐射
+      e.orbA += 0.5 * dt;
+      e.x = W / 2 + 260 * Math.sin(e.orbA);
+      e.y = H / 2 + 200 * Math.sin(e.orbA * 2);
+      e.fireT -= dt;
+      if (e.fireT <= 0) {
+        e.fireT = 3.2;
+        spawnBlackDir(e.x - e.armL - 26, e.y, -1, 0);
+        spawnBlackDir(e.x + e.armL + 26, e.y, 1, 0);
+        spawnBlackDir(e.x, e.y - e.armL - 26, 0, -1);
+        spawnBlackDir(e.x, e.y + e.armL + 26, 0, 1);
+        beep(180, 0.15, 0.12, "square");
+      }
+    } else {                                             // 追踪
+      const dx = px - e.x, dy = py - e.y, d = Math.hypot(dx, dy) || 1;
+      const base = e.boss ? SPD.boss : e.kind === "big" ? SPD.big : SPD.chase;
+      const sp = base * clampN(1 - e.value / 2600, 0.55, 1);
+      e.x += dx / d * sp * dt;
+      e.y += dy / d * sp * dt;
+    }
+  }
+
+  /* --- 敌人分离 --- */
+  for (let i = 0; i < ST.enemies.length; i++) {
+    for (let j = i + 1; j < ST.enemies.length; j++) {
+      const a = ST.enemies[i], b = ST.enemies[j];
+      if (a.kind === "bossBar" || b.kind === "bossBar" ||
+          a.kind === "bossCross" || b.kind === "bossCross") continue;
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const min = eRad(a) + eRad(b) + 2;
+      if (d < min) {
+        const push = (min - d) * 0.3;
+        const nx = dx / d, ny = dy / d;
+        a.x -= nx * push; a.y -= ny * push;
+        b.x += nx * push; b.y += ny * push;
+      }
+    }
+  }
+
+  /* --- 敌人：碰撞判定 + 击杀 --- */
+  for (const e of ST.enemies) {
+    let hit = false, hx = e.x, hy = e.y;
+    if (e.kind === "bossBar") {
+      const hx1 = Math.cos(e.ang) * e.barL / 2, hy1 = Math.sin(e.ang) * e.barL / 2;
+      const ax = e.x - hx1, ay = e.y - hy1, bx2 = e.x + hx1, by2 = e.y + hy1;
+      const abx = bx2 - ax, aby = by2 - ay;
+      const tt = clampN(((px - ax) * abx + (py - ay) * aby) / (abx * abx + aby * aby || 1), 0, 1);
+      hx = ax + abx * tt; hy = ay + aby * tt;
+      hit = circleOctHit(hx, hy, e.barT / 2 + 2, px, py, pHalfX(), pHalf(), 0);
+    } else if (e.kind === "bossCross") {
+      const h1 = segClosest(px, py, e.x - e.armL, e.y, e.x + e.armL, e.y);
+      const v1 = segClosest(px, py, e.x, e.y - e.armL, e.x, e.y + e.armL);
+      if (Math.hypot(px - h1[0], py - h1[1]) <= Math.hypot(px - v1[0], py - v1[1])) {
+        hx = h1[0]; hy = h1[1];
+      } else { hx = v1[0]; hy = v1[1]; }
+      hit = circleOctHit(hx, hy, e.armT / 2 + 2, px, py, pHalfX(), pHalf(), 0);
+    } else {
+      hit = circleOctHit(e.x, e.y, eRad(e), px, py, pHalfX(), pHalf(), 2);
+    }
+    if (e.cd <= 0 && ST.iframes > 0 && hit) {
+      if (e.kind === "bounce") { devourBlue(e, hx, hy); }        // 无敌帧随时可吞蓝球
+      else if (e.kind === "big") {                               // 无敌帧不挡手术
+        clashPlayer(e.value, hx, hy, e.kind);
+        burst(hx, hy, 14, "#ffd24d");
+        killEnemy(e);
+      }
+    }
+    if (e.cd <= 0 && ST.iframes <= 0 && hit) {
+      if (e.boss && !e.cracked) {                                // 第一撞=裂开减半
+        clashPlayer(e.value, hx, hy, e.kind);
+        burst(hx, hy, 18, "#ffd24d");
+        e.cracked = true;
+        const preV = e.value;
+        e.value = Math.ceil(e.value / 2);
+        const cv2 = Math.max(2, Math.round(preV * 0.05));
+        for (let i = 0; i < 3; i++)
+          spawnOrb(e.x + rnd(-80, 80), e.y + rnd(-60, 80), cv2, null, true);
+        pushText(e.x, e.y - 100, "钱袋裂开!", "#ffd24d", 16);
+        e.cd = 1.5;
+        pushText(e.x, e.y - 80, "裂开! 再撞一次 -" + e.value, "#ffd24d", 20);
+        beep(330, 0.15, 0.12, "square");
+      } else if (e.kind === "bounce" && e.dev) {                 // 红字吞噬
+        devourBlue(e, hx, hy);
+      } else {
+        clashPlayer(e.value, hx, hy, e.kind);
+        burst(hx, hy, 14, "#ffd24d");
+        killEnemy(e);
+      }
+    }
+  }
+  ST.enemies = ST.enemies.filter(e => !e.dead);
+
+  /* --- 资源球 --- */
+  for (const o of ST.orbs) {
+    const dx = px - o.x, dy = py - o.y, d = Math.hypot(dx, dy) || 1;
+    if (d < 95 * ST.magnetMul) {
+      o.x += dx / d * 240 * dt; o.y += dy / d * 240 * dt;
+    }
+    if (o.life != null) {
+      o.life -= dt;
+      if (o.life <= 0) o.dead = true;
+    }
+    if (d < pHalfX() + 11) {
+      const got = o.noMul ? o.value : o.value * ST.orbMul;
+      ST.pv = playerValue() + got;
+      pushText(o.x, o.y - 20, "+" + (Math.round(got * 10) / 10), "#52ff9a", 18);
+      const oxp = o.value * 2;
+      gainXp(oxp);
+      pushText(o.x, o.y - 38, "EXP+" + oxp, "#7dffcf", 13);
+      burst(o.x, o.y, 6, "#52ff9a");
+      beep(940, 0.07, 0.08);
+      o.dead = true;
+    }
+  }
+  ST.orbs = ST.orbs.filter(o => !o.dead);
+  ST.orbT -= dt;
+  if (ST.orbT <= 0) {
+    spawnOrb(undefined, undefined, Math.round(rnd(2, 5)));
+    ST.orbT = rnd(2.0, 3.2) * ST.orbRate;
+  }
+
+  updateBlacks(dt, px, py);
+
+  /* --- 每波一次的限时二选一 --- */
+  if (!ST.shrinkSpawned && !ST.shrink && ST.breather <= 0 &&
+      ST.waveElapsed >= ST.shrinkAt) {
+    const win = rnd(3, 5);
+    const reach = Math.pow(2, baseSpeed()) * 11.25 * win * 0.85;
+    const dd2 = rnd(150, Math.max(160, reach));
+    const a1 = rnd(0, 6.28);
+    const a2 = a1 + rnd(2.1, 3.14);
+    const items = [
+      { kind: "shrink", x: clampN(px + Math.cos(a1) * dd2, 60, W - 60),
+        y: clampN(py + Math.sin(a1) * dd2, 80, H - 80), rot: 0 },
+      { kind: "xp", x: clampN(px + Math.cos(a2) * dd2, 60, W - 60),
+        y: clampN(py + Math.sin(a2) * dd2, 80, H - 80), rot: 0 },
+    ];
+    ST.shrink = { t: win, items };
+    ST.shrinkSpawned = true;
+    beep(520, 0.1, 0.09, "triangle");
+    pushText(px, py - 70, "挑战 · 二选一!", "#7dffcf", 16);
+  }
+  if (ST.shrink) {
+    const sh = ST.shrink;
+    sh.t -= dt;
+    const blink = sh.t < 1.5;
+    let best = null, bestD = 1e9;
+    for (const it of sh.items) {
+      it.rot += dt * 2;
+      const dd2 = Math.hypot(px - it.x, py - it.y);
+      if (dd2 < pHalfX() + 16 && dd2 < bestD) { bestD = dd2; best = it; }
+      it.blink = blink;
+    }
+    if (best) {
+      if (best.kind === "xp") {
+        ST.xpMul = Math.round((ST.xpMul + 0.1) * 10) / 10;
+        pushText(px, py - 56, "经验获取 +10%", "#ffd24d", 20);
+      } else {
+        ST.psizeMul = Math.max(0.35, ST.psizeMul * 0.9);
+        pushText(px, py - 56, "体型 -10%", "#a78bff", 20);
+      }
+      seq([740, 592], 90);
+      ST.shrink = null;
+    } else if (sh.t <= 0) {
+      ST.shrink = null;
+    }
+  }
+
+  /* --- 胜负结算 --- */
+  if (playerValue() <= 0.5) {
+    ST.scene = "over"; ST.overT = 0; ST.uiLock = 0.5;
+    const pvF = Math.round(playerValue());
+    if (pvF > ST.peak) ST.peak = pvF;
+    pushText(W / 2, H / 2, "数值归零 · 败北", "#ff6b6b", 32);
+    seq([330, 247, 165], 140);
+    const rec = { peak: Math.round(ST.peak), wave: ST.wave, kills: ST.kills,
+      time: Math.round(ST.t), level: ST.level, grazes: ST.grazeN,
+      ts: nowStr(), ver: VERSION };
+    const r = lbSubmit(rec);
+    ST.lbRank = r.rank; ST.lbTotal = r.total;
+  }
+  if (ST.bossSpawned && !ST.enemies.some(e => e.boss)) {
+    ST.bossSpawned = false;
+    ST.bossFloor = playerValue() * 2;
+    pushText(W / 2, H / 2 - 40, "BOSS 击破 · 战利品！", "#52ff9a", 28);
+    seq([523, 659, 784, 1047], 100);
+  }
+
+  decayFx(dt);
+}
+
+/* ==========================================================================
+   渲 染
+   ========================================================================== */
+function txt(s, x, y, size, color, align = "center", weight = "bold") {
+  ctx.font = weight + " " + size + 'px "Microsoft YaHei","PingFang SC",sans-serif';
+  ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle";
+  ctx.fillText(s, x, y);
+}
+function circle(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); }
+
+function drawBackground() {
+  ctx.fillStyle = "#05040f"; ctx.fillRect(0, 0, W, H);
+  if (GRASS.complete && GRASS.width) {
+    ctx.imageSmoothingEnabled = false;
+    for (let gy = 0; gy < H; gy += 48)
+      for (let gx = 0; gx < W; gx += 48) ctx.drawImage(GRASS, gx, gy);
+  } else { ctx.fillStyle = "#7dbe63"; ctx.fillRect(0, 0, W, H); }
+}
+
+function drawEnemy(e) {
+  const flash = e.flash || 0;
+  if (e.kind === "bossBar") {
+    ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(e.ang);
+    ctx.fillStyle = "#1a1030"; ctx.fillRect(-150 - 10, -18, 320, 36);
+    ctx.fillStyle = e.cracked ? "#8a7fa0" : e.color; ctx.fillRect(-150 - 7, -15, 314, 30);
+    if (e.cracked) { ctx.fillStyle = "rgba(176,176,192,0.4)"; ctx.fillRect(-157, -18, 320, 36); }
+    txt(Math.round(e.value).toString(), 0, 1, 20, "#ffffff");
+    ctx.restore();
+    return;
+  }
+  if (e.kind === "bossCross") {
+    ctx.save(); ctx.translate(e.x, e.y);
+    ctx.fillStyle = "#1a1030";
+    ctx.fillRect(-e.armL - 10, -e.armT / 2 - 3, e.armL * 2 + 20, e.armT + 6);
+    ctx.fillRect(-e.armT / 2 - 3, -e.armL - 10, e.armT + 6, e.armL * 2 + 20);
+    ctx.fillStyle = e.cracked ? "#8a7fa0" : e.color;
+    ctx.fillRect(-e.armL - 7, -e.armT / 2, e.armL * 2 + 14, e.armT);
+    ctx.fillRect(-e.armT / 2, -e.armL - 7, e.armT, e.armL * 2 + 14);
+    if (e.cracked) { ctx.fillStyle = "rgba(176,176,192,0.4)";
+      ctx.fillRect(-e.armL - 10, -e.armT / 2 - 3, e.armL * 2 + 20, e.armT + 6);
+      ctx.fillRect(-e.armT / 2 - 3, -e.armL - 10, e.armT + 6, e.armL * 2 + 20); }
+    txt(Math.round(e.value).toString(), 0, 1, 20, "#ffffff");
+    ctx.restore();
+    return;
+  }
+  // 圆形敌人（含圆 Boss / 橙 / 红 / 蓝）
+  const r = eRad(e) * (e.kind === "bounce" && e.dev ? 1 + 0.12 * Math.sin(ST.t * 8) : 1);
+  ctx.fillStyle = (e.kind === "bounce" && e.dev) ? "#ffd24d" : "#1a1030";
+  circle(e.x, e.y, r + 3);
+  ctx.fillStyle = flash > 0 ? "#ffffff" : e.color;
+  circle(e.x, e.y, r);
+  if (e.cracked) { ctx.fillStyle = "rgba(176,176,192,0.45)"; circle(e.x, e.y, r); }
+  const fs = Math.max(10, Math.min(28, r * 0.7));
+  txt(Math.round(e.value).toString(), e.x, e.y + 1, fs, "#ffffff");
+}
+
+function drawBlack(b) {
+  const sc = 1 + 0.1 * Math.sin(ST.t * 6 + b.ph);
+  ctx.save(); ctx.translate(b.x, b.y); ctx.scale(sc, sc);
+  ctx.fillStyle = "#1a0a2e"; circle(0, 0, 29);
+  ctx.fillStyle = "#0d0d1a"; circle(0, 0, 26);
+  ctx.fillStyle = "rgba(120,40,160,0.28)"; circle(0, 0, 20);
+  txt("-50%", 0, 1, 15, "#ff5c5c");
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const hs = pHalf();
+  const pop = 1 + ST.popT * 1.1;
+  const sc = hs / 24 * pop;
+  // 冲刺就绪指示器（脚下小三角）
+  if (ST.active && ST.scene === "play" && ST.dodgeCd <= 0) {
+    const a = (120 + 60 * Math.sin(ST.t * 4)) / 255;
+    ctx.globalAlpha = a; ctx.fillStyle = "#4dd8ff";
+    ctx.fillRect(ST.mx - 6, ST.my + hs + 4, 12, 3);
+    ctx.fillRect(ST.mx - 4, ST.my + hs + 7, 8, 3);
+    ctx.fillRect(ST.mx - 2, ST.my + hs + 10, 4, 3);
+    ctx.globalAlpha = 1;
+  }
+  const row = { 2: 0, 4: 1, 6: 2, 8: 3 }[ST.dir] || 0;
+  const col = ST.moving ? [0, 1, 2, 1][Math.floor(ST.animT * 8) % 4] : 1;
+  ctx.save();
+  ctx.translate(ST.mx, ST.my + hs);
+  ctx.scale(sc, sc);
+  if (HINA.complete && HINA.width)
+    ctx.drawImage(HINA, col * 64, row * 64, 64, 64, -32, -64, 64, 64);
+  else { ctx.fillStyle = "#4dd8ff"; circle(0, -hs / sc / 2, hs / sc); }
+  ctx.restore();
+}
+
+function drawHUD() {
+  const b = 8;
+  txt("数值 " + Math.round(playerValue()), b, b + 13, 20, "#4dd8ff", "left");
+  txt("Lv " + ST.level, b + 160, b + 13, 20, "#ffd24d", "left");
+  ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(b + 226, b + 9, 130, 10);
+  ctx.fillStyle = "#7dffcf";
+  ctx.fillRect(b + 227, b + 10, Math.max(0, Math.floor(128 * clampN(ST.xp / xpNeed(), 0, 1))), 8);
+  txt("EXP", b + 362, b + 16, 15, "#9fe8c8", "left");
+  const red = ST.breather <= 0 && ST.waveT <= 10;
+  const bossTag = ST.enemies.some(e => e.boss) || ST.bossWarn ||
+    (ST.wave % 5 === 0 && !ST.bossDeployed) ? "·BOSS " : " ";
+  const waveLabel = ST.breather > 0 ? "第 " + ST.wave + " 波·准备中"
+    : "第 " + ST.wave + " 波" + bossTag + Math.ceil(Math.max(0, ST.waveT)) + "s";
+  txt(waveLabel + "  击杀 " + ST.kills, b, b + 43, 20, red ? "#ff5c5c" : "#cfe3ff", "left");
+  txt("速+" + Math.round(Math.min(0.4, 0.05 * ST.upgrades.spd) * 100) + "%  再生" + ST.upgrades.heal + "档" +
+    "  生成" + (1 / ST.orbRate).toFixed(1) + "x" +
+    "  吸" + ST.magnetMul.toFixed(1) + "x" +
+    "  绿球" + ST.orbMul.toFixed(2) + "x" +
+    "  体型" + Math.round(ST.psizeMul * 100) + "%", b, b + 65, 14, "#8fa3c8", "left");
+  txt(ST.dodgeCd > 0 ? "空格冲刺 " + ST.dodgeCd.toFixed(1) + "s" : "空格冲刺 就绪",
+    b, b + 85, 14, ST.dodgeCd > 0 ? "#8fa3c8" : "#7dffcf", "left");
+  txt(VERSION, b + 366, b + 83, 12, "#5a5a8a", "left");
+  if (ST.upgrades.heal > 0) {
+    txt("再生", b + 210, b + 84, 13, "#8fa3c8", "left");
+    const seg = Math.floor(ST.regen.ramp * 5 + 0.001);
+    for (let i = 0; i < 5; i++) {
+      const on = i < seg && ST.regen.pause <= 0;
+      ctx.fillStyle = on
+        ? (ST.regen.ramp >= 1 ? (Math.sin(ST.t * 6) > 0 ? "#52ff9a" : "#7dffcf") : "#52ff9a")
+        : "rgba(0,0,0,0.55)";
+      ctx.fillRect(b + 252 + i * 22, b + 82, 18, 8);
+    }
+  }
+}
+
+/* ============ 触控界面（右下冲刺钮 / 右上暂停 / 左下摇杆） ============ */
+function drawTouchUI() {
+  if (!TOUCH.on) return;
+  const b = BTN.dash, ready = ST.dodgeCd <= 0;
+  ctx.fillStyle = "rgba(16,12,36,0.55)"; circle(b.x, b.y, b.r);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = ready ? (Math.sin(ST.t * 5) > 0 ? "#7dffcf" : "#4dd8ff") : "#5a5a8a";
+  ctx.beginPath(); ctx.arc(b.x, b.y, b.r - 2, 0, 6.2832); ctx.stroke();
+  if (!ready) {
+    ctx.fillStyle = "rgba(5,4,15,0.45)";
+    ctx.beginPath(); ctx.moveTo(b.x, b.y);
+    ctx.arc(b.x, b.y, b.r - 3, -1.5708, -1.5708 + 6.2832 * Math.min(1, ST.dodgeCd / 5));
+    ctx.closePath(); ctx.fill();
+  }
+  txt("冲刺", b.x, b.y, 20, ready ? "#7dffcf" : "#8fa3c8");
+  const pb = BTN.pause;
+  ctx.fillStyle = "rgba(16,12,36,0.55)"; circle(pb.x, pb.y, pb.r);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(207,214,255,0.6)";
+  ctx.beginPath(); ctx.arc(pb.x, pb.y, pb.r - 1, 0, 6.2832); ctx.stroke();
+  txt("II", pb.x, pb.y + 1, 18, "#cfe3ff");
+  if (TOUCH.joyId !== null) {
+    ctx.strokeStyle = "rgba(125,255,207,0.5)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(TOUCH.joyBX, TOUCH.joyBY, TOUCH.R, 0, 6.2832); ctx.stroke();
+    ctx.fillStyle = "rgba(125,255,207,0.35)";
+    circle(TOUCH.joyBX + TOUCH.dx, TOUCH.joyBY + TOUCH.dy, 22);
+  } else {
+    ctx.strokeStyle = "rgba(125,255,207,0.22)"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(92, H - 92, TOUCH.R, 0, 6.2832); ctx.stroke();
+    ctx.fillStyle = "rgba(125,255,207,0.12)"; circle(92, H - 92, 22);
+  }
+}
+
+/* ============ 覆盖层：规则页 / 升级 / 暂停 / 结算 ============ */
+function drawIntro() {
+  const iw = 740, ih = 560, ix = W / 2 - iw / 2, iy = H / 2 - ih / 2;
+  ctx.fillStyle = "rgba(10,8,26,0.92)"; ctx.fillRect(ix, iy, iw, ih);
+  ctx.fillStyle = "#7dffcf";
+  ctx.fillRect(ix, iy, iw, 4); ctx.fillRect(ix, iy + ih - 4, iw, 4);
+  txt("不管了，统统吃掉！", ix + iw / 2, iy + 46, 34, "#7dffcf");
+  txt("你是一个数字。变大，活下去。—— 贪食，或被吞并", ix + iw / 2, iy + 86, 18, "#cfe3ff");
+  const line = (dy, text, color = "#cfe3ff", size = 17) =>
+    txt(text, ix + 40, iy + dy + 12, size, color, "left");
+  line(112, "操作：方向键/WASD/触屏摇杆 移动 · 空格/冲刺键 冲刺（无敌0.45秒/冷却5秒）", "#4dd8ff", 16);
+  line(138, "Shift 疾跑 · Esc 暂停 · M 音乐 · 触屏：左下摇杆 / 右下冲刺 / 右上暂停", "#4dd8ff", 14);
+  line(166, "碰撞 = 等价交换：球当场死，你掉等量数值；数值归零即败北", "#ffd24d");
+  line(194, "变大：捡绿球 · 击杀涨经验 · 升级四选一", "#52ff9a");
+  txt("敌 人 图 鉴", ix + 40, iy + 226, 15, "#8fa3c8", "left");
+  const foes = [
+    ["#ff7a4d", "橙球", "跟屁虫大军：单只不疼，成群要命；越往后越多", false],
+    ["#ff4d6d", "红球", "战损化作5颗绿球(各25%)返还；每6秒少一颗——越拖越亏，手慢无（不会致死，锁1血）", false],
+    ["#4dd8ff", "蓝球", "吐钱的贩卖机：边飞边吐6颗；吐完等倒计时红字——拿来把你！无损整吞", false],
+    ["#0d0d1a", "黑球", "凶残的过路费：碰到-50%；冲刺无敌帧撞它=当场没收", true],
+    ["#b44dff", "BOSS", "每5波上门收税(45秒)，要撞两次；它就是钱袋：活着漏钱/裂开爆钱/打穿返还一半", false],
+  ];
+  foes.forEach((f, i) => {
+    const y = iy + 257 + i * 34;
+    if (f[3]) { ctx.fillStyle = "#5a2a8a"; circle(ix + 56, y, 12); }
+    ctx.fillStyle = f[0]; circle(ix + 56, y, 9);
+    txt(f[1], ix + 76, y, 17, "#ffffff", "left");
+    txt(f[2], ix + 160, y + 1, 14, "#8fa3c8", "left");
+  });
+  line(424, "每波 30 秒（Boss 波 45 秒）· 清得越快，下一波绿球越多 · 每局从头开始", "#cfe3ff", 15);
+  txt("按 空格 开始", ix + iw / 2, iy + 499, 20, "#7dffcf");
+  txt("当前版本 " + VERSION + "（网页版 · 机制移植自 MZ v0.81）", ix + iw / 2, iy + 530, 12, "#5a5a8a");
+}
+
+function cardRect(i, N) {
+  if (N === 4) return { x: W / 2 + (i % 2 === 0 ? -126 : 126), y: 250 + ((i / 2) | 0) * 104 };
+  return { x: W / 2 + (i - (N - 1) / 2) * 250, y: 300 };
+}
+function drawLevelup() {
+  const N = LU.list.length;
+  txt("升 级 ！  Lv " + ST.level, W / 2, 130, 30, "#ffd24d");
+  LU.list.forEach((c, i) => {
+    const sel = i === LU.sel;
+    const p = cardRect(i, N);
+    const sc = sel ? 1.08 : 1;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(sc, sc);
+    ctx.fillStyle = "rgba(16,12,36,0.88)"; ctx.fillRect(-110, -46, 220, 92);
+    const bc = sel ? "#7dffcf" : "#5a5a8a";
+    ctx.fillStyle = bc;
+    ctx.fillRect(-110, -46, 220, 3); ctx.fillRect(-110, 43, 220, 3);
+    ctx.fillRect(-110, -46, 3, 92); ctx.fillRect(107, -46, 3, 92);
+    txt(c.name, 0, -12, 21, sel ? "#7dffcf" : "#cfd6ff");
+    txt(c.sub(), 0, 20, 13, "#8fa3c8");
+    ctx.restore();
+  });
+  txt("← → 选择    空格/Z 确认", W / 2, 400, 18, "#cfe3ff");
+}
+
+function drawPause() {
+  ctx.fillStyle = "rgba(5,4,15,0.72)"; ctx.fillRect(0, 0, W, H);
+  txt("暂停", W / 2, H / 2 - 92, 30, "#cfe3ff");
+  ["继续游戏", "重新开始"].forEach((s, i) => {
+    const sel = i === PU.sel;
+    const y = H / 2 - 30 + i * 56;
+    ctx.fillStyle = sel ? "rgba(20,60,60,0.9)" : "rgba(16,12,36,0.88)";
+    ctx.fillRect(W / 2 - 140, y - 22, 280, 44);
+    ctx.fillStyle = sel ? "#7dffcf" : "#5a5a8a";
+    ctx.fillRect(W / 2 - 140, y - 22, 280, 2); ctx.fillRect(W / 2 - 140, y + 20, 280, 2);
+    txt(s, W / 2, y, 20, sel ? "#7dffcf" : "#8fa3c8");
+  });
+  txt("↑ ↓ 选择 · 空格 确认 · Esc 继续", W / 2, H / 2 + 110, 15, "#8fa3c8");
+}
+
+function fmtTime(t) { return Math.floor(t / 60) + "分" + Math.round(t % 60) + "秒"; }
+function drawOver() {
+  if (ST.overT <= 0.9) return;
+  ctx.fillStyle = "rgba(6,4,16,0.78)"; ctx.fillRect(0, 0, W, H);
+  const cx = W / 2;
+  txt("数值归零 · 败北", cx, 120, 40, "#ff6b6b");
+  txt("峰值 " + Math.round(ST.peak) + " · 第 " + ST.wave + " 波 · 击杀 " + ST.kills +
+    " · " + fmtTime(ST.t), cx, 180, 20, "#cfe3ff");
+  txt("Lv " + ST.level + " · 黑球消除 " + ST.grazeN + " 次 · 死因：" +
+    ({ big: "红球", bounce: "蓝球", chase: "橙球", bossBar: "BOSS·横扫",
+       bossCross: "BOSS·十字", round: "BOSS·巨岩" }[ST.lastHit] || ST.lastHit || "?"), cx, 212, 16, "#8fa3c8");
+  if (ST.lbRank > 0)
+    txt("本地排行榜：第 " + ST.lbRank + " 名 / 共 " + ST.lbTotal + " 条", cx, 254, 20, "#ffd24d");
+  const list = lbLoad().slice(0, 5);
+  if (list.length) {
+    txt("—— 峰值排行 ——", cx, 292, 14, "#5a5a8a");
+    list.forEach((r, i) => {
+      txt((i + 1) + ". " + r.peak + "  ·  第" + r.wave + "波  ·  击杀" + r.kills + "  ·  " +
+        fmtTime(r.time), cx, 322 + i * 28, 16, i === 0 ? "#ffd24d" : "#8fa3c8");
+    });
+  }
+  txt("按 空格 再来一局", cx, 500, 22, "#7dffcf");
+  txt("成绩已自动存入本地排行榜", cx, 540, 13, "#5a5a8a");
+}
+
+/* ============ 主渲染 ============ */
+function render() {
+  drawBackground();
+  // 冲刺预警圈（Boss）
+  if (ST.bossWarn) {
+    const w = ST.bossWarn;
+    const sc = 1 + 0.1 * Math.sin(ST.t * 7);
+    ctx.fillStyle = "rgba(255,77,109,0.28)";
+    circle(w.x, w.y, (w.zr + 18) * sc);
+    ctx.fillStyle = "#ff4d6d"; circle(w.x, w.y, 8);
+    txt("BOSS 降落 " + Math.max(0, Math.ceil(w.t)), w.x, w.y - 70, 20, "#ff8fa3");
+  }
+  for (const o of ST.orbs) {
+    const sc = 1 + 0.14 * Math.sin(ST.t * 5 + o.ph);
+    ctx.fillStyle = "#0d2818"; circle(o.x, o.y, 11 * sc);
+    ctx.fillStyle = "#52ff9a"; circle(o.x, o.y, 9 * sc);
+  }
+  drawPlayer();
+  for (const e of ST.enemies) drawEnemy(e);
+  for (const b of ST.blacks) drawBlack(b);
+  if (ST.shrink) {
+    for (const it of ST.shrink.items) {
+      ctx.save(); ctx.translate(it.x, it.y); ctx.rotate(it.rot);
+      if (it.blink) ctx.globalAlpha = Math.sin(ST.t * 18) > 0 ? 1 : 0.31;
+      ctx.fillStyle = "#2a1a4d"; ctx.fillRect(-23, -23, 46, 46);
+      ctx.fillStyle = it.kind === "shrink" ? "rgba(167,139,255,0.85)" : "rgba(255,210,77,0.9)";
+      ctx.fillRect(-15, -15, 30, 30);
+      ctx.rotate(-it.rot);
+      txt(it.kind === "shrink" ? "-10%" : "EXP", 0, 1, 13, "#ffffff");
+      ctx.restore(); ctx.globalAlpha = 1;
+    }
+  }
+  for (const p of ST.parts) {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - (p.size || 6) / 2, p.y - (p.size || 6) / 2, p.size || 6, p.size || 6);
+  }
+  for (const t of ST.texts) {
+    ctx.globalAlpha = Math.min(1, t.life * 2);
+    txt(t.text, t.x, t.y, t.size, t.color);
+    ctx.globalAlpha = 1;
+  }
+  if (ST.active) drawHUD();
+  if (ST.active && ST.scene === "play") drawTouchUI();
+  if (ST.scene === "intro") drawIntro();
+  else if (ST.scene === "levelup") drawLevelup();
+  else if (ST.scene === "pause") drawPause();
+  else if (ST.scene === "over") drawOver();
+}
+
+/* ============ 暂停菜单输入 ============ */
+function tickPause() {
+  if (isTriggered("up") || isTriggered("down")) { PU.sel = 1 - PU.sel; beep(700, 0.05, 0.06); }
+  if (isTriggered("cancel")) { ST.scene = "play"; ST.uiLock = 0.2; beep(660, 0.06, 0.07); return; }
+  if (clickAt) {
+    for (let i = 0; i < 2; i++) {
+      const y = H / 2 - 30 + i * 56;
+      if (clickAt.x >= W / 2 - 140 && clickAt.x <= W / 2 + 140 &&
+          clickAt.y >= y - 22 && clickAt.y <= y + 22) {
+        PU.sel = i; hit.ok = true;                     // 点按直接生效（触屏友好）
+        break;
+      }
+    }
+    clickAt = null;
+  }
+  if (isTriggered("ok")) {
+    if (PU.sel === 0) { ST.scene = "play"; ST.uiLock = 0.2; beep(660, 0.06, 0.07); }
+    else { beep(784, 0.1, 0.1); startGame(); }
+  }
+}
+
+/* ============ 主循环（固定 1/60 步长，与原版一致） ============ */
+let acc = 0, last = performance.now();
+function frame(now) {
+  acc += Math.min(100, now - last); last = now;
+  let n = 0;
+  while (acc >= 1000 / 60 && n < 5) {
+    if (ST.scene === "pause") tickPause();
+    else updateClash(1 / 60);
+    BGM.update();
+    clickAt = null;
+    clearTriggers();
+    acc -= 1000 / 60; n++;
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+startGame();                            // 首屏：startGame → 规则页（按空格开局）
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
