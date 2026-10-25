@@ -1173,7 +1173,15 @@ function drawPlayer() {
 
 function drawHUD() {
   const b = 8;
-  txt("数值 " + Math.round(playerValue()), b, b + 13, 20, "#4dd8ff", "left");
+  { // HP：红色加粗+深色描边（草地上也醒目），字号与波次行一致
+    ctx.font = '900 20px "Microsoft YaHei","PingFang SC",sans-serif';
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    ctx.lineJoin = "round"; ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(10,8,26,0.72)";
+    const s = "HP   " + Math.round(playerValue());
+    ctx.strokeText(s, b, b + 13);
+    ctx.fillStyle = "#ff4747"; ctx.fillText(s, b, b + 13);
+  }
   txt("Lv " + ST.level, b + 160, b + 13, 20, "#ffd24d", "left");
   ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(b + 226, b + 9, 130, 10);
   ctx.fillStyle = "#7dffcf";
@@ -1246,7 +1254,7 @@ function drawIntro() {
   ctx.fillStyle = "#7dffcf";
   ctx.fillRect(ix, iy, iw, 4); ctx.fillRect(ix, iy + ih - 4, iw, 4);
   txt("不管了，统统吃掉！", ix + iw / 2, iy + 46, 34, "#7dffcf");
-  txt("你是一个数字。变大，活下去。—— 贪食，或被吞并", ix + iw / 2, iy + 86, 18, "#cfe3ff");
+  txt("注意你的HP。变大，活下去。—— 贪食，或被吞并", ix + iw / 2, iy + 86, 18, "#cfe3ff");
   const line = (dy, text, color = "#cfe3ff", size = 17) =>
     txt(text, ix + 40, iy + dy + 12, size, color, "left");
   line(112, "操作：方向键/WASD/触屏摇杆 移动 · 空格/冲刺键 冲刺（无敌0.45秒/冷却5秒）", "#4dd8ff", 16);
