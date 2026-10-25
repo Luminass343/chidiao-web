@@ -192,8 +192,10 @@ const BGM = {
   update() {
     try {
       if (!AC || ST.bgmMuted) return;
+      if (AC.state === "suspended") { AC.resume(); return; }   // 被浏览器挂起时逐帧尝试唤醒
       const playing = ST.active && (ST.scene === "play" || ST.scene === "levelup" || ST.scene === "pause");
       if (!playing) { this.next = Math.max(this.next, AC.currentTime + 0.1); return; }
+      if (this.next < AC.currentTime - 0.5) this.next = AC.currentTime + 0.05;   // 停顿过久直接重对齐，防补排爆音
       while (this.next < AC.currentTime + 0.35) {
         const f = this.NOTES[this.step % this.NOTES.length];
         const when = Math.max(this.next, AC.currentTime);
@@ -319,7 +321,7 @@ addEventListener("keydown", e => {
   const tg = e.target && e.target.tagName;
   if (tg === "INPUT" || tg === "TEXTAREA") return;   // 输入框里打字不触发游戏键
   const k = KEYMAP[e.code];
-  if (e.code === "KeyM" && !e.repeat) { ST.bgmMuted = !ST.bgmMuted; return; }
+  if (e.code === "KeyM" && !e.repeat) { ST.bgmMuted = !ST.bgmMuted; initAudio(); e.preventDefault(); return; }
   if (!k) return;
   e.preventDefault();
   initAudio();
@@ -390,7 +392,7 @@ function startGame() {
     upgrades: { spd: 0, heal: 0 },
     chain: { t: 0, n: 0 }, regen: { ramp: 0, pause: 0, accum: 0, resets: 0, fullT: 0, redKept: 0 }, grazeN: 0,
     overT: 0, pv: 10, dir: 2, animT: 0, dispCd: 0, lbRank: 0, lbTotal: 0, lastMoveT: 0,
-    overView: 0, cloudState: "idle", cloudRank: 0, cloudTotal: 0, cloudList: null,
+    overView: 0, cloudState: "idle", cloudRank: 0, cloudTotal: 0, cloudList: null, bgmMuted: false,
     cloudKicked: false, msgSentT: -99,
   });
   MIRROR_TRACE = [];
@@ -1476,8 +1478,8 @@ function drawIntro() {
   txt("你是一只大肥鱼，你的目标是吃饭！！——把他们的token都吃掉", ix + iw / 2, iy + 86, 18, "#cfe3ff");
   const line = (dy, text, color = "#cfe3ff", size = 17) =>
     txt(text, ix + 40, iy + dy + 12, size, color, "left");
-  line(112, "操作：方向键/WASD/触屏摇杆 移动 · 空格/冲刺键 冲刺（无敌0.45秒/冷却5秒）", "#4dd8ff", 16);
-  line(138, "Shift 疾跑 · Esc 暂停 · M 音乐 · 触屏：左下摇杆 / 右下冲刺 / 右上暂停", "#4dd8ff", 14);
+  line(112, "操作：方向键/WASD/触屏摇杆 移动 · 空格/冲刺键 冲刺疾跑（无敌0.45秒/冷却5秒）", "#4dd8ff", 16);
+  line(138, "Esc 暂停 · M 音乐 · 触屏：左下摇杆 / 右下冲刺 / 右上暂停", "#4dd8ff", 14);
   line(166, "碰撞 = 等价交换：球当场死，你掉等量数值；数值归零即败北", "#ffd24d");
   line(194, "变大：捡大白饭 · 击杀涨经验 · 升级四选一", "#52ff9a");
   txt("敌 人 图 鉴", ix + 40, iy + 226, 16, "#8fa3c8", "left");
