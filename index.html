@@ -757,8 +757,8 @@ function killEnemy(e) {
         spawnOrb(e.x + rnd(-90, 90), e.y + rnd(-70, 90), bv2, null, true);
       pushText(e.x, e.y - 70, "钱袋打穿 · 返还 " + bv2 * 8, "#52ff9a", 20);
     } else if (e.kind === "big") {
-      const n = clampN(5 - Math.floor((e.age || 0) / 6), 0, 5);
-      const v = Math.max(3, Math.ceil(e.value * 0.25));
+      const n = clampN(5 - Math.floor((e.age || 0) / 5), 0, 5);
+      const v = Math.max(3, Math.ceil(e.value * 0.3));
       for (let i = 0; i < n; i++)
         spawnOrb(rnd(60, W - 60), rnd(80, H - 80), v, null, true);
       if (n > 0) pushText(e.x, e.y - 70, "奖励 x" + n, "#52ff9a", 16);
@@ -1026,11 +1026,22 @@ function updateClash(dt) {
       const dev = ST.breather <= 0 && ST.waveT - (ST.waveBonus || 0) <= 10;   // 基础倒计时剩10秒可吞：Boss额外加的15秒不推后金框（45秒盘面=剩余25秒亮）
       if (dev !== !!e.dev) { e.dev = dev; if (dev) beep(980, 0.06, 0.07); }
     }
-    if (e.kind === "big") {                              // 在场每6秒奖励-1
-      const tk = Math.floor(e.age / 6);
+    if (e.kind === "big") {                              // 在场每5秒奖励-1；掏空=暴走追人
+      const tk = Math.floor(e.age / 5);
       if (tk > (e.tick || 0)) {
         e.tick = tk;
         if (tk <= 5) pushText(e.x, e.y - 70, "奖励 -1", "#ff8fa3", 14);
+      }
+      if (!e.enraged && (e.age || 0) >= 25) {            // 奖励全没了：首次喊话+进入暴走
+        e.enraged = true; e.shoutT = ST.t + 4;
+        MEOWS.push({ x: e.x, y: e.y - 70, life: 1.8, text: "把大白饭给我！！",
+          c1: "#ff8fa3", c2: "#ff4d6d", ears: false });
+        beep(140, 0.25, 0.15, "sawtooth");
+      }
+      if (e.enraged && ST.t >= (e.shoutT || 0)) {        // 暴走期每4秒喊一次
+        e.shoutT = ST.t + 4;
+        MEOWS.push({ x: e.x, y: e.y - 70, life: 1.6, text: "把大白饭给我！！",
+          c1: "#ff8fa3", c2: "#ff4d6d", ears: false });
       }
     }
     if (e.kind === "bounce" && ST.breather <= 0 && ST.waveT > 10) {  // 养球
@@ -1101,6 +1112,7 @@ function updateClash(dt) {
       let sp;
       if ((e.count || 1) >= 4) sp = Math.min(240, 200 + (e.count - 4) * 10);   // 大肥鱼模式：卡在玩家基速180与满级迅捷252之间
       else if (e.count) sp = SPD.chase + (e.count - 1) * 14;                   // 合体小幅增速：≤3只仍追不上玩家
+      else if (e.kind === "big" && e.enraged) sp = 120;                        // 暴走红球：固定加速追人
       else {
         const base = e.boss ? SPD.boss : e.kind === "big" ? SPD.big : SPD.chase;
         sp = base * clampN(1 - e.value / 2600, 0.55, 1);
@@ -1545,18 +1557,14 @@ function drawPlayer() {
 
 function drawHUD() {
   const b = 8;
-  { // 大白饭（原HP）：标签在左，数值移到画布中部——右侧不再大片留白
+  { // 大白饭（原HP）：标签+数值一体的左上角红字（草地上也醒目）
     ctx.font = '900 20px "Microsoft YaHei","PingFang SC",sans-serif';
-    ctx.textBaseline = "middle";
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
     ctx.lineJoin = "round"; ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(10,8,26,0.72)";
-    ctx.textAlign = "left";
-    ctx.strokeText("大白饭", b, b + 13);
-    ctx.fillStyle = "#ff4747"; ctx.fillText("大白饭", b, b + 13);
-    ctx.textAlign = "center";
-    const v = String(Math.round(playerValue()));
-    ctx.strokeText(v, 452, b + 13);
-    ctx.fillStyle = "#ffffff"; ctx.fillText(v, 452, b + 13);
+    const s = "大白饭 " + Math.round(playerValue());
+    ctx.strokeText(s, b, b + 13);
+    ctx.fillStyle = "#ff4747"; ctx.fillText(s, b, b + 13);
   }
   txt("Lv " + ST.level, b + 160, b + 13, 20, "#ffd24d", "left");
   ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(b + 226, b + 9, 130, 10);
@@ -1639,10 +1647,10 @@ function drawIntro() {
   line(194, "变大：捡大白饭 · 击杀涨经验 · 升级四选一", "#52ff9a");
   txt("敌 人 图 鉴", ix + 40, iy + 226, 16, "#8fa3c8", "left");
   const foes = [
-    { img: "Claude", name: "Claude", desc: "被Claude追到就要挨批啦！" },
-    { img: "ChatGPT", name: "GPT", desc: "尽快吃掉GPT爆token,迟了就被她用完了" },
-    { img: "Qwen", name: "Qwen", desc: "Qwen大小姐超有钱,等她撒完币再吞掉她！" },
-    { img: "GLM", name: "GLM", desc: "GLM会偷走你的白饭！用冲刺踹她一脚爆金币！" },
+    { img: "Claude", name: "Claude", desc: "被Claude追到就要挨批啦！——她们会合体！" },
+    { img: "ChatGPT", name: "GPT", desc: "尽快吃掉GPT爆token,迟了就被她用完了——杀得快爆大白饭！" },
+    { img: "Qwen", name: "Qwen", desc: "Qwen大小姐超有钱,等她撒完币再吞掉她！——最后10秒全吞掉！" },
+    { img: "GLM", name: "GLM", desc: "GLM会偷走你的白饭！用冲刺踹她一脚爆金币！——碰到数值减半！" },
     { boss4: true, name: "BOSS", desc: "4个神秘的BOSS，等你来破解他们的机制" },
   ];
   foes.forEach((f, i) => {
