@@ -1038,21 +1038,24 @@ function updateClash(dt) {
     for (let j = i + 1; j < ST.enemies.length; j++) {
       const b = ST.enemies[j];
       if (a.dead || b.dead) continue;
-      if (a.kind === "chase" && b.kind === "chase") {  // 追踪球相触=合体：大吞小、数值相加、小幅增速
-        const big = a.value >= b.value ? a : b, small = big === a ? b : a;
-        big.value += small.value;
-        big.count = (big.count || 1) + (small.count || 1);
-        big.sizeMul = Math.min(1, 0.5 + 0.125 * (big.count - 1));
-        small.dead = true;
-        burst((a.x + b.x) / 2, (a.y + b.y) / 2, 12, "#ff4da6");
-        beep(520 + Math.min(6, big.count) * 40, 0.08, 0.08);
-        if (big.count >= 4 && !big.fishAt) {           // 首次破3只：宣告大肥鱼模式
-          big.fishAt = ST.t + 2.5;
-          MEOWS.push({ x: big.x, y: big.y - eRad(big) - 30, life: 1.8, text: "大肥鱼！！！",
-            c1: "#ff4da6", c2: "#ffd24d", ears: false });
-          beep(740, 0.12, 0.1);
+      if (a.kind === "chase" && b.kind === "chase") {  // 追踪球真正碰到彼此才合体：大吞小、数值相加、小幅增速
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (d < eRad(a) + eRad(b)) {                   // 圆心距小于两球半径和=实际相触
+          const big = a.value >= b.value ? a : b, small = big === a ? b : a;
+          big.value += small.value;
+          big.count = (big.count || 1) + (small.count || 1);
+          big.sizeMul = Math.min(1, 0.5 + 0.125 * (big.count - 1));
+          small.dead = true;
+          burst((a.x + b.x) / 2, (a.y + b.y) / 2, 12, "#ff4da6");
+          beep(520 + Math.min(6, big.count) * 40, 0.08, 0.08);
+          if (big.count >= 4 && !big.fishAt) {         // 首次破3只：宣告大肥鱼模式
+            big.fishAt = ST.t + 2.5;
+            MEOWS.push({ x: big.x, y: big.y - eRad(big) - 30, life: 1.8, text: "大肥鱼！！！",
+              c1: "#ff4da6", c2: "#ffd24d", ears: false });
+            beep(740, 0.12, 0.1);
+          }
         }
-        continue;
+        continue;                                      // 不互相推开：允许它们靠近，碰到才融合
       }
       if (a.kind === "bossBar" || b.kind === "bossBar" ||
           a.kind === "bossCross" || b.kind === "bossCross") continue;
