@@ -813,7 +813,7 @@ function updateClash(dt) {
     }
   } else {
     ST.waveT -= dt; ST.spawnT -= dt; ST.waveElapsed += dt;
-    if (ST.waveElapsed >= 25 && !ST.lowWarned) {       // 开波25秒：蓝球进入可吞噬（Boss波不再延后）
+    if (!ST.lowWarned && (ST.wave % 5 === 0 ? ST.waveElapsed >= 25 : ST.waveT <= 10)) {   // 与可吞判定同步：普通波剩余10秒/Boss波25秒
       ST.lowWarned = true; beep(880, 0.09, 0.1);
       pushText(W / 2, 170, "蓝球金光亮起 · 可以吞噬啦", "#4dd8ff", 20);
     }
@@ -949,7 +949,8 @@ function updateClash(dt) {
       }
     }
     if (e.kind === "bounce") {                           // 红字阶段=可吞噬态
-      const dev = ST.breather <= 0 && ST.waveElapsed >= 25;   // 开波25秒起可吞：按已过时间算，Boss波45秒不再拖晚吞吃
+      const dev = ST.breather <= 0 &&
+        (ST.wave % 5 === 0 ? ST.waveElapsed >= 25 : ST.waveT <= 10);   // 普通波剩余10秒可吞；Boss波开波25秒可吞（不随45秒延后）
       if (dev !== !!e.dev) { e.dev = dev; if (dev) beep(980, 0.06, 0.07); }
     }
     if (e.kind === "big") {                              // 在场每6秒奖励-1
@@ -1089,7 +1090,7 @@ function updateClash(dt) {
       hit = circleOctHit(e.x, e.y, eRad(e), px, py, pHalfX(), pHalf(), 2);
     }
     if (e.cd <= 0 && ST.iframes > 0 && hit) {
-      if (e.kind === "bounce") { devourBlue(e, hx, hy); }        // 无敌帧随时可吞蓝球
+      if (e.kind === "bounce") { if (e.dev) devourBlue(e, hx, hy); }   // 冲刺也只在金光窗口内可吞，窗口外穿过不交互
       else if (e.kind === "big") {                               // 无敌帧不挡手术
         clashPlayer(e.value, hx, hy, e.kind);
         burst(hx, hy, 14, "#ffd24d");
