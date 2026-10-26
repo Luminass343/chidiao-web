@@ -107,7 +107,7 @@ function grokAxeWorld(e) {                             // Boss2 斧刃圆心与�
 /* ============ 全局状态（每局 startGame 重置） ============ */
 let MIRROR_TRACE = [];                                 // 「镜」回放缓冲：玩家最近 4 秒坐标
 const ST = {
-  active: false, wave: 1, waveT: 30, waveElapsed: 0, budget: 70, breather: 0,
+  active: false, wave: 1, waveT: 30, waveElapsed: 0, waveBonus: 0, budget: 70, breather: 0,
   enemies: [], texts: [], parts: [], orbs: [], bossWarn: null,
   psizeMul: 1, shrink: null, shrinkAt: 0, shrinkSpawned: false,
   magStacks: 0, xpMul: 1, lowWarned: false, blacks: [], blackT: 0, orbMul: 1, orbLayers: 0, dashT: 0,
@@ -379,7 +379,7 @@ cv.addEventListener("contextmenu", e => e.preventDefault());
 /* ============ 开局 / 重置 ============ */
 function startGame() {
   Object.assign(ST, {
-    active: true, wave: 1, waveT: 30, waveElapsed: 0, budget: 70, breather: 0,
+    active: true, wave: 1, waveT: 30, waveElapsed: 0, waveBonus: 0, budget: 70, breather: 0,
     enemies: [], texts: [], parts: [], orbs: [], bossWarn: null,
     psizeMul: 1, shrink: null, shrinkAt: rnd(4, 24), shrinkSpawned: false,
     magStacks: 0, xpMul: 1, lowWarned: false, blacks: [], blackT: rnd(9, 15), orbMul: 1, orbLayers: 0, dashT: 0,
@@ -528,6 +528,7 @@ function startBossWarning() {
   ST.bossWarn = { x, y, t: 5, shown: -1, zr };
   ST.bossDeployed = true;
   ST.waveT += BOSS_BONUS;                              // Boss 登场的那一波才加时
+  ST.waveBonus = (ST.waveBonus || 0) + BOSS_BONUS;     // 记录加时量：蓝球金框按基础倒计时算，不受这15秒推后
   beep(180, 0.35, 0.12, "sawtooth");
 }
 function updateBossWarn(dt) {
@@ -802,7 +803,7 @@ function updateClash(dt) {
   if (ST.breather > 0) {
     ST.breather -= dt;
     if (ST.breather <= 0) {
-      ST.waveT = WAVE_TIME; ST.waveElapsed = 0;
+      ST.waveT = WAVE_TIME; ST.waveElapsed = 0; ST.waveBonus = 0;
       if (ST.wave % 5 === 0 && !ST.bossDeployed) {
         ST.bossEarly = false; ST.bossQueued = false;
         startBossWarning();
@@ -813,7 +814,7 @@ function updateClash(dt) {
     }
   } else {
     ST.waveT -= dt; ST.spawnT -= dt; ST.waveElapsed += dt;
-    if (!ST.lowWarned && (ST.wave % 5 === 0 ? ST.waveElapsed >= 25 : ST.waveT <= 10)) {   // 与可吞判定同步：普通波剩余10秒/Boss波25秒
+    if (!ST.lowWarned && ST.waveT - (ST.waveBonus || 0) <= 10) {   // 与可吞判定同步：基础倒计时剩10秒（Boss加时不算进去，45秒盘面=剩余25秒亮金框）
       ST.lowWarned = true; beep(880, 0.09, 0.1);
       pushText(W / 2, 170, "蓝球金光亮起 · 可以吞噬啦", "#4dd8ff", 20);
     }
@@ -949,8 +950,7 @@ function updateClash(dt) {
       }
     }
     if (e.kind === "bounce") {                           // 红字阶段=可吞噬态
-      const dev = ST.breather <= 0 &&
-        (ST.wave % 5 === 0 ? ST.waveElapsed >= 25 : ST.waveT <= 10);   // 普通波剩余10秒可吞；Boss波开波25秒可吞（不随45秒延后）
+      const dev = ST.breather <= 0 && ST.waveT - (ST.waveBonus || 0) <= 10;   // 基础倒计时剩10秒可吞：Boss额外加的15秒不推后金框（45秒盘面=剩余25秒亮）
       if (dev !== !!e.dev) { e.dev = dev; if (dev) beep(980, 0.06, 0.07); }
     }
     if (e.kind === "big") {                              // 在场每6秒奖励-1
