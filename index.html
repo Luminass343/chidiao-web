@@ -813,9 +813,9 @@ function updateClash(dt) {
     }
   } else {
     ST.waveT -= dt; ST.spawnT -= dt; ST.waveElapsed += dt;
-    if (ST.waveT <= 10 && !ST.lowWarned) {
+    if (ST.waveElapsed >= 25 && !ST.lowWarned) {       // 开波25秒：蓝球进入可吞噬（Boss波不再延后）
       ST.lowWarned = true; beep(880, 0.09, 0.1);
-      pushText(W / 2, 170, "最后10秒 · 蓝球可吞噬", "#4dd8ff", 20);
+      pushText(W / 2, 170, "蓝球金光亮起 · 可以吞噬啦", "#4dd8ff", 20);
     }
     while (ST.forceQ.length && ST.waveElapsed >= ST.forceQ[0].at) {
       spawnEnemyOfKind(ST.forceQ.shift().kind, true);
@@ -949,7 +949,7 @@ function updateClash(dt) {
       }
     }
     if (e.kind === "bounce") {                           // 红字阶段=可吞噬态
-      const dev = ST.breather <= 0 && ST.waveT <= 10;
+      const dev = ST.breather <= 0 && ST.waveElapsed >= 25;   // 开波25秒起可吞：按已过时间算，Boss波45秒不再拖晚吞吃
       if (dev !== !!e.dev) { e.dev = dev; if (dev) beep(980, 0.06, 0.07); }
     }
     if (e.kind === "big") {                              // 在场每6秒奖励-1
@@ -1020,17 +1020,40 @@ function updateClash(dt) {
       e.lx = e.x; e.ly = e.y;
     } else {                                             // 追踪
       const dx = px - e.x, dy = py - e.y, d = Math.hypot(dx, dy) || 1;
-      const base = e.boss ? SPD.boss : e.kind === "big" ? SPD.big : SPD.chase;
-      const sp = base * clampN(1 - e.value / 2600, 0.55, 1);
+      let sp;
+      if ((e.count || 1) >= 4) sp = Math.min(240, 200 + (e.count - 4) * 10);   // 大肥鱼模式：卡在玩家基速180与满级迅捷252之间
+      else if (e.count) sp = SPD.chase + (e.count - 1) * 14;                   // 合体小幅增速：≤3只仍追不上玩家
+      else {
+        const base = e.boss ? SPD.boss : e.kind === "big" ? SPD.big : SPD.chase;
+        sp = base * clampN(1 - e.value / 2600, 0.55, 1);
+      }
       e.x += dx / d * sp * dt;
       e.y += dy / d * sp * dt;
     }
   }
 
-  /* --- 敌人分离 --- */
+  /* --- 敌人分离 / 追踪球合体 --- */
   for (let i = 0; i < ST.enemies.length; i++) {
+    const a = ST.enemies[i];
     for (let j = i + 1; j < ST.enemies.length; j++) {
-      const a = ST.enemies[i], b = ST.enemies[j];
+      const b = ST.enemies[j];
+      if (a.dead || b.dead) continue;
+      if (a.kind === "chase" && b.kind === "chase") {  // 追踪球相触=合体：大吞小、数值相加、小幅增速
+        const big = a.value >= b.value ? a : b, small = big === a ? b : a;
+        big.value += small.value;
+        big.count = (big.count || 1) + (small.count || 1);
+        big.sizeMul = Math.min(1, 0.5 + 0.125 * (big.count - 1));
+        small.dead = true;
+        burst((a.x + b.x) / 2, (a.y + b.y) / 2, 12, "#ff4da6");
+        beep(520 + Math.min(6, big.count) * 40, 0.08, 0.08);
+        if (big.count >= 4 && !big.fishAt) {           // 首次破3只：宣告大肥鱼模式
+          big.fishAt = ST.t + 2.5;
+          MEOWS.push({ x: big.x, y: big.y - eRad(big) - 30, life: 1.8, text: "大肥鱼！！！",
+            c1: "#ff4da6", c2: "#ffd24d", ears: false });
+          beep(740, 0.12, 0.1);
+        }
+        continue;
+      }
       if (a.kind === "bossBar" || b.kind === "bossBar" ||
           a.kind === "bossCross" || b.kind === "bossCross") continue;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
@@ -1043,6 +1066,7 @@ function updateClash(dt) {
       }
     }
   }
+  ST.enemies = ST.enemies.filter(e => !e.dead);
 
   /* --- 敌人：碰撞判定 + 击杀 --- */
   for (const e of ST.enemies) {
@@ -1330,6 +1354,33 @@ function drawEnemy(e) {
     ctx.restore();
     if (flash > 0) { ctx.fillStyle = "rgba(255,255,255,0.85)"; circle(e.x, e.y, rr); }
     if (e.cracked) { ctx.fillStyle = "rgba(176,176,192,0.45)"; circle(e.x, e.y, rr); }
+    if (e.kind === "chase" && (e.count || 1) >= 2) {   // 合体猎犬：玫红描边+书本徽标（Claude标志物），本体仍是原头像
+      ctx.strokeStyle = "#ff4da6"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(e.x, e.y, rr + 2, 0, 6.2832); ctx.stroke();
+      const bw = rr * 0.62, bh = rr * 0.42, byy = e.y - rr - rr * 0.18;
+      ctx.save(); ctx.translate(e.x, byy);
+      ctx.fillStyle = "#3a2416";
+      ctx.beginPath();
+      ctx.moveTo(0, bh * 0.55);
+      ctx.lineTo(-bw, bh * 0.18); ctx.lineTo(-bw, -bh * 0.5);
+      ctx.lineTo(0, -bh * 0.15);
+      ctx.lineTo(bw, -bh * 0.5); ctx.lineTo(bw, bh * 0.18);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ffefdb";
+      ctx.beginPath();
+      ctx.moveTo(0, bh * 0.38);
+      ctx.lineTo(-bw * 0.82, bh * 0.05); ctx.lineTo(-bw * 0.82, -bh * 0.5);
+      ctx.lineTo(0, -bh * 0.16);
+      ctx.lineTo(bw * 0.82, -bh * 0.5); ctx.lineTo(bw * 0.82, bh * 0.05);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#ff9f43"; circle(bw * 0.45, -bh * 0.18, Math.max(1.5, rr * 0.07));
+      ctx.restore();
+      if ((e.count || 1) >= 4 && ST.t >= (e.fishAt || 0)) {  // 大肥鱼模式：周期性喊话
+        e.fishAt = ST.t + 2.5;
+        MEOWS.push({ x: e.x, y: e.y - rr * 1.5 - 26, life: 1.6, text: "大肥鱼！！！",
+          c1: "#ff4da6", c2: "#ffd24d", ears: false });
+      }
+    }
     const fs = Math.max(10, Math.min(28, rr * 0.7));
     txtO(Math.round(e.value).toString(), e.x, e.y + 1, fs, "#ffffff");
     if (e.kind === "round" && ST.t >= (e.meowAt || 0)) {   // 哈基米隔几秒发一次喵
