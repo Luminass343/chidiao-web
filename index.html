@@ -345,7 +345,7 @@ function toGame(e) {
 }
 cv.addEventListener("pointerdown", e => {
   e.preventDefault(); initAudio();
-  TOUCH.on = true;
+  if (e.pointerType === "touch" || e.pointerType === "pen") TOUCH.on = true;   // 仅触屏/笔启用触屏UI，PC鼠标不显示摇杆按钮
   const p = toGame(e);
   const inB = (b, pad = 10) => Math.hypot(p.x - b.x, p.y - b.y) < b.r + pad;
   // 菜单场景（升级/暂停/结算）：整屏点选，绝不抓摇杆——否则左边选项点不到
@@ -1354,9 +1354,7 @@ function drawEnemy(e) {
     ctx.restore();
     if (flash > 0) { ctx.fillStyle = "rgba(255,255,255,0.85)"; circle(e.x, e.y, rr); }
     if (e.cracked) { ctx.fillStyle = "rgba(176,176,192,0.45)"; circle(e.x, e.y, rr); }
-    if (e.kind === "chase" && (e.count || 1) >= 2) {   // 合体猎犬：玫红描边+书本徽标（Claude标志物），本体仍是原头像
-      ctx.strokeStyle = "#ff4da6"; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(e.x, e.y, rr + 2, 0, 6.2832); ctx.stroke();
+    if (e.kind === "chase" && (e.count || 1) >= 2) {   // 合体猎犬：书本徽标（Claude标志物），本体仍是原头像
       const bw = rr * 0.62, bh = rr * 0.42, byy = e.y - rr - rr * 0.18;
       ctx.save(); ctx.translate(e.x, byy);
       ctx.fillStyle = "#3a2416";
